@@ -9,7 +9,8 @@ simulation. The analysis operates at two levels:
 
 1. **Individual** — lifetime retirement value (pension NPV + TSP
    present value) across three career profiles (Enlisted, Officer,
-   Prior-Enlisted Officer) and 49 career-length scenarios.
+   Prior-Enlisted Officer) and 52 career-length scenarios spanning
+   the statutory service maxima (4–40 officer, 4–30 enlisted).
 2. **Fiscal** — expected government cost per entrant and aggregate
    DoD cost per annual accession cohort, weighted by actuarial
    separation probabilities.

@@ -48,7 +48,8 @@ archetypes — Enlisted (entry age 18), Commissioned Officer (entry
 22), Prior-Enlisted Officer (enlists at 18, commissions at 26) —
 and computes the High-Three pension base for every
 (profile, separation-year) combination. The scenario grid is
-uniform 2-year spacing: 49 scenarios total.
+uniform 2-year spacing to the statutory service maxima (4–40
+officer/PEO, 4–30 enlisted): 52 scenarios total.
 
 ### 03a — Deterministic baseline
 
@@ -97,7 +98,7 @@ Three cuts:
 
 1. A one-at-a-time **tornado** at the Officer/20 anchor — which
    inputs move the answer most.
-2. Four named **scenarios** across all 49 cases (Base, Bull
+2. Four named **scenarios** across all 52 cases (Base, Bull
    Market, Bear Market, Low Participation) — showing the 20-YOS
    sign is regime-dependent.
 3. The **separation-distribution what-if** — if BRS shifts people

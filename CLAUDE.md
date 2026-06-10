@@ -19,7 +19,7 @@ The project is implemented in Python using Jupyter Notebooks in VS Code.
 - **Commissioned Officer:** Grade progression from RAND DOPMA data in `PromotionTiming.csv`. Entry age 22.
 - **Prior-Enlisted Officer:** Assumes 8 years enlisted before commissioning. Uses `PriorEnlistedOfficer` column in `PromotionTiming.csv`. Entry age 26 at commissioning (18 at enlistment).
 
-**Career-length scenarios (YOS):** Uniform 2-year spacing, per profile — Officers and PEOs: 4–38 (18 scenarios each); Enlisted: 4–28 (13 scenarios). Total: 49 valid (profile, sep_yos) combinations.
+**Career-length scenarios (YOS):** Uniform 2-year spacing spanning the statutory service maxima (officer 40 years, enlisted 30), per profile — Officers and PEOs: 4–40 (19 scenarios each); Enlisted: 4–30 (14 scenarios). Total: 52 valid (profile, sep_yos) combinations. Officer/40 separates at age 62 (> 60); the TSP growth-to-60 step is a handled no-op there (balance at separation taken as-is).
 
 **TSP contribution rates:** Member contributes 5% of basic pay under **both** systems — this is held constant to isolate the government-funded difference. BRS adds a 1% automatic government contribution from entry plus up to 4% matching beginning after 2 years of service (6% total in YOS 1–2, 10% from YOS 3). High-Three has no government contribution (5% member only). Functions: `brs_govt_rate(yos, member_rate)` / `brs_total_rate(yos, member_rate)` in `src/tsp_calcs.py`; steady-state constants `BRS_CONTRIB_RATE = 0.10`, `H3_MEMBER_RATE = 0.05`.
 
@@ -63,9 +63,9 @@ Raw data files are in `data/raw/`. Processed outputs go to `data/processed/`.
 - `cpi_inflation.csv` — annual CPI index + derived year-over-year inflation rate
 - `life_expectancy.csv` — SSA 2022 actuarial table
 - `pay_profiles.csv` — (Profile, YOS, MonthlyPay); one row per career year per profile; **no SepYOS column** — notebooks filter with `YOS <= sep_yos` at query time
-- `high_three_matrix.csv` — Profile × SepYOS matrix of High-Three monthly base values on the uniform 49-scenario grid; reference output only — downstream notebooks recompute High-3 from `pay_profiles.csv` at query time
-- `deterministic_results.csv` — full lifetime value comparison under both systems for all 49 valid (profile, sep_yos) scenarios, in constant 2026 dollars (`H3Annual`/`BRSAnnual` are nominal at separation); output of 03a
-- `mc_results.csv` — Monte Carlo percentile summary (p10/p25/p50/p75/p90/mean) for BRSAdv, H3Total, BRSTotal across all 49 scenarios; output of 03b
+- `high_three_matrix.csv` — Profile × SepYOS matrix of High-Three monthly base values on the uniform 52-scenario grid; reference output only — downstream notebooks recompute High-3 from `pay_profiles.csv` at query time
+- `deterministic_results.csv` — full lifetime value comparison under both systems for all 52 valid (profile, sep_yos) scenarios, in constant 2026 dollars (`H3Annual`/`BRSAnnual` are nominal at separation); output of 03a
+- `mc_results.csv` — Monte Carlo percentile summary (p10/p25/p50/p75/p90/mean) for BRSAdv, H3Total, BRSTotal across all 52 scenarios; output of 03b
 - `fiscal_results.csv` — per-scenario government cost (H3_GovtCost, BRS_GovtCost, GovtTSP_PV, DoD_Savings) plus separation-weighted expected costs per entrant by profile; output of 04
 - `scenario_weights.csv` — (Profile, SepYOS, Weight) separation probabilities binned to the modeled scenarios, summing to 1 per profile; output of 04, consumed by nb05 section 4
 
@@ -80,6 +80,7 @@ Raw data files are in `data/raw/`. Processed outputs go to `data/processed/`.
 - Defines grade at each YOS for all three career profiles
 - Columns: `YOS`, `Officer`, `Enlisted`, `PriorEnlistedOfficer`
 - YOS 1–40; officer column based on RAND DOPMA data; enlisted reflects typical progression
+- Officer/PEO columns deliberately top out at O-8 for late-career YOS: basic pay is capped at those YOS (the pay table flat-lines at ~$19,000/mo from YOS 34), so promoting to O-9/O-10 would not change modeled pay
 - Entry ages are model constants defined in code, not in this file: enlisted = 18, officer = 22, prior-enlisted officer = 18 (enlists) / 26 (commissions after 8 enlisted years)
 - Use this to look up the correct pay grade from `BasicPay_2026.csv` at each YOS
 
@@ -128,7 +129,7 @@ Load and clean all raw data files. Output processed CSVs to `data/processed/`. K
 Build the full career pay series for each profile (one row per YOS, no scenario dimension). Compute the High-Three base (average of the 3 highest annual pay values) for each (profile, sep_yos) combination. Outputs `pay_profiles.csv` and `high_three_matrix.csv`.
 
 ### `03a_deterministic.ipynb`
-Deterministic (center-path) lifetime value calculation under both systems for all 49 valid scenarios. Uses fixed COLA / pay growth (2.75%), discount rate (5.0%), glide-path L Fund means, and SSA 2022 male life expectancy; values in constant 2026 dollars. Validates the pension and TSP math before introducing stochastic variation. Outputs `deterministic_results.csv`.
+Deterministic (center-path) lifetime value calculation under both systems for all 52 valid scenarios. Uses fixed COLA / pay growth (2.75%), discount rate (5.0%), glide-path L Fund means, and SSA 2022 male life expectancy; values in constant 2026 dollars. Validates the pension and TSP math before introducing stochastic variation. Outputs `deterministic_results.csv`.
 
 ### `03b_monte_carlo.ipynb`
 Monte Carlo simulation adding stochastic variation to TSP returns, COLA, and life expectancy. Uses 20,000 iterations; validated via half-to-full convergence check (20K→40K shift < 1% of P10-P90 spread on Officer/20 YOS, the most volatile scenario). Report results at 10th, 25th, 50th, 75th, 90th percentiles plus mean. Outputs `mc_results.csv`.
@@ -138,7 +139,7 @@ Scale individual results to DoD aggregate cost.
 - Government TSP cost measured on **actuarial basis**: PV of contributions compounded at the 5% discount rate (not TSP market returns), matching the reference date used for pension NPV. This avoids a 1.5–2.6× overstatement of DoD's fiscal cost.
 - Weight each YOS scenario by its DoD actuarial separation probability; sum to get expected government cost per entrant
 - Monte Carlo section adds stochastic COLA and life expectancy (N=20,000 iterations). COLA fit on rolling 30-year average CPI, matching 03b. COLA draws are shared across all scenarios per iteration; death age is independent per scenario. The COLA draw drives pay growth, so the High-Three base and `GovtTSP_PV` are stochastic too; all values deflated to 2026 dollars per iteration.
-- Convergence validated via 20K→40K half-to-full check: max shift 0.21% of P10-P90 spread (Officer per-entrant savings, most volatile metric) — PASS at 1% threshold
+- Convergence validated via 20K→40K half-to-full check: max shift 0.23% of P10-P90 spread (Officer per-entrant savings, most volatile metric) — PASS at 1% threshold
 - Force-level scaling uses 18,000 officer + 140,000 enlisted annual accessions
 - Outputs `fiscal_results.csv` and `scenario_weights.csv`
 
