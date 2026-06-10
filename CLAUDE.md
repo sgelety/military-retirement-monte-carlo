@@ -40,6 +40,8 @@ The project is implemented in Python using Jupyter Notebooks in VS Code.
 
 **Results framing:** Expressed as "lifetime value difference (BRS − H3)." Positive values indicate BRS yields higher lifetime value; negative values indicate High-Three yields higher lifetime value. Avoids editorializing about which system is "better."
 
+**Presentation conventions:** Cross-profile displays (charts, pivots, printed tables) use the order Enlisted → Prior-Enlisted Officer → Officer via a `PROFILE_ORDER` constant in each notebook; computation/run loops keep their original order to preserve per-scenario seeds and MC draw sequences. Profile colors: Enlisted darkorange, PEO forestgreen, Officer steelblue. Escape `$` as `\$` in notebook markdown (paired dollars otherwise render as LaTeX math).
+
 **Monte Carlo stochastic variables (all others held fixed within each scenario):**
 1. TSP investment returns (parameterized from TSP L Fund historical data)
 2. Inflation/COLA rates — one draw per iteration, held for the full career + retirement, so it represents **lifetime-average inflation**. Fit on rolling 30-year average CPI (mean ≈ 3.39%, std ≈ 1.27%; `fit_cola_stats(cpi, window=30)` on the full 1914+ history), used consistently in 03b/04/05; DoD Board of Actuaries long-term assumption (2.75%) is the deterministic baseline. Annual-inflation std (~3%) would overstate the uncertainty of a multi-decade average; overlapping-window autocorrelation makes the std estimate itself uncertain, which the nb05 OAT bounds (1.5%/5.0% ≈ historical range of 30-yr averages, 0.8%–5.4%) cover. The COLA draw also drives basic-pay growth and the 2026-$ deflator, so it is shared across all components within an iteration.
@@ -140,7 +142,8 @@ Scale individual results to DoD aggregate cost.
 - Weight each YOS scenario by its DoD actuarial separation probability; sum to get expected government cost per entrant
 - Monte Carlo section adds stochastic COLA and life expectancy (N=20,000 iterations). COLA fit on rolling 30-year average CPI, matching 03b. COLA draws are shared across all scenarios per iteration; death age is independent per scenario. The COLA draw drives pay growth, so the High-Three base and `GovtTSP_PV` are stochastic too; all values deflated to 2026 dollars per iteration.
 - Convergence validated via 20K→40K half-to-full check: max shift 0.23% of P10-P90 spread (Officer per-entrant savings, most volatile metric) — PASS at 1% threshold
-- Force-level scaling uses 18,000 officer + 140,000 enlisted annual accessions
+- Spending decomposition splits expected per-entrant cost by recipient group (≤19 vs 20+ YOS): under H3 100% of spending goes to the 20+ minority by construction; under BRS only ~1–4% reaches the <20 majority — savings come from paying retirees 12–14% less, not redistribution. Also prices the cliff in govt dollars (the 20th year adds ~$0.8–1.7M to the obligation). Caveat in-notebook: actuarial cost ≈ half the member-side value of the early-separatee TSP benefit.
+- Force-level scaling uses 18,000 officer + 140,000 enlisted annual accessions; PEOs are deliberately excluded there (they enter as enlisted accessions — a separate line would double-count)
 - Outputs `fiscal_results.csv` and `scenario_weights.csv`
 
 ### `05_sensitivity_analysis.ipynb`
@@ -151,6 +154,9 @@ Scale individual results to DoD aggregate cost.
   (1.5% / 5.0%), discount rate (3% / 7%), life expectancy (±10 yr), member
   TSP contribution (0% / 10%, baseline 5%). The discarded "real pay growth"
   variable is intentionally not included.
+- Female life-table sensitivity at the Officer/20 anchor via
+  `death_age_offset` (+4.1 yr): median deepens ~20% toward H3, within the
+  ±10-yr OAT band; gender is deliberately not a full model dimension.
 - Scenario-based analysis (Base, Bull Market, Bear Market, Low Participation),
   3-panel profile plot with shared y-axis. Bull/Bear use a uniform ±2 pp
   market-regime return stress — a deliberately separate construct from the

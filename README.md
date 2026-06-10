@@ -41,6 +41,11 @@ simulation quantifies who gains, who loses, and what it costs DoD.
 - Per entrant, expected government cost is **roughly 10% lower
   under BRS**, and this holds across the modeled uncertainty range
   and a separation-timing what-if.
+- BRS barely redistributes on a cost basis: only ~1–4% of DoD's
+  retirement spending reaches the ≤19-YOS majority — the savings
+  come from paying retirees 12–14% less, not from spreading the
+  money. The 20th year of service still raises DoD's obligation
+  by \$0.8–1.7M per member.
 
 See the notebooks for exact figures, uncertainty bands, and
 sensitivity analyses.

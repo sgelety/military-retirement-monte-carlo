@@ -134,6 +134,12 @@ Three cuts:
 - **Government:** BRS is unambiguously cheaper — ~10–13% per
   entrant, ~\$5.1B per cohort, robust to the full uncertainty
   range and to plausible separation-timing shifts.
+- **Where the money goes:** BRS barely redistributes on a cost
+  basis — only ~1–4% of DoD's retirement spending reaches the
+  ≤19-YOS majority; the savings come from paying retirees 12–14%
+  less per retiree. The 20th year of service still raises DoD's
+  obligation by \$0.8–1.7M, so BRS softens the government-side
+  cliff only modestly.
 - **The two-sided story** (the poster's thesis): BRS spread the
   benefit across the ~80% who previously got nothing and cut DoD's
   costs — financed largely by the career force, whose 20+ year
