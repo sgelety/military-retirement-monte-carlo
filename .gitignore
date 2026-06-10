@@ -4,3 +4,6 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+
+# Editor atomic-write temp files (Dropbox sync race)
+*.tmp.*
