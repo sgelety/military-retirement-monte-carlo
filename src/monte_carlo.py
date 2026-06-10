@@ -53,20 +53,40 @@ def fit_fund_stats(tsp_df):
     }
 
 
-def fit_cola_stats(cpi_df):
+def fit_cola_stats(cpi_df, window=30):
     """
-    Return mean and std (decimal) of historical CPI inflation.
+    Mean and std (decimal) of rolling long-run average CPI.
+
+    The Monte Carlo draws ONE COLA per iteration and holds it
+    for the full career + retirement, so the draw represents
+    lifetime-average inflation. It is therefore fit on rolling
+    `window`-year average inflation rather than annual values:
+    annual volatility would overstate the uncertainty of a
+    multi-decade average. Overlapping windows are heavily
+    autocorrelated, so the std estimate is itself uncertain;
+    the OAT bounds in notebook 05 cover that estimation risk.
 
     Parameters
     ----------
     cpi_df : pd.DataFrame
-        Inflation column in percent (e.g., 3.2 means 3.2%).
+        Year and Inflation (percent) columns. Pass the full
+        history — n years yield n - window + 1 observations.
+    window : int
+        Averaging horizon in years (default 30).
 
     Returns
     -------
     dict  {"mean": float, "std": float}
     """
-    rates = cpi_df["Inflation"].dropna().values / 100.0
+    rates = (
+        cpi_df.sort_values("Year")["Inflation"]
+        .dropna()
+        .rolling(window)
+        .mean()
+        .dropna()
+        .values
+        / 100.0
+    )
     return {
         "mean": float(rates.mean()),
         "std": float(rates.std(ddof=1)),

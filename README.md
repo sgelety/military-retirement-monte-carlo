@@ -79,7 +79,9 @@ kernel.
 - TSP returns follow an age-based L Fund glide path parameterized
   from TSP historical data (extended to 2002 via regression-based
   synthetic backfill, R² > 0.99).
-- COLA is parameterized from post-1947 CPI; the DoD Board of
+- The COLA draw is held constant within each simulated future, so it
+  represents lifetime-average inflation; it is fit on rolling 30-year
+  average CPI (mean ≈ 3.4%, std ≈ 1.3%). The DoD Board of
   Actuaries 2.75% assumption anchors the deterministic baseline.
 - Government TSP cost is measured on an **actuarial basis** (PV of
   contributions at the 5% discount rate), not at market returns.
@@ -93,6 +95,10 @@ kernel.
   correlation or fat tails), and returns are drawn independently of
   inflation; the Bull/Bear scenarios in notebook 05 partially probe
   joint movements.
+- The COLA std comes from overlapping 30-year windows, which are
+  heavily autocorrelated (a century of data holds only ~3–4
+  independent 30-year periods), so it is itself uncertain; the
+  notebook 05 OAT bounds (1.5% / 5.0%) cover that estimation risk.
 - Individual-level TSP values discount expected risky returns at 5%,
   a member's-expected-value perspective that does not haircut for
   risk (a certainty-equivalent view would value the TSP lower). The

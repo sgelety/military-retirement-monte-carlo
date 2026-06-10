@@ -154,12 +154,11 @@ Scale individual results to DoD aggregate cost.
   3-panel profile plot with shared y-axis. Bull/Bear use a uniform ±2 pp
   market-regime return stress — a deliberately separate construct from the
   OAT's per-fund ±1 SE bound (regime stress vs. estimation uncertainty).
-- Note: nb05 centers COLA on the rolling 30-yr average CPI mean (~3.39%),
-  the same empirical basis as nb03b/nb04; nb03a's deterministic path uses
-  the 2.75% actuarial assumption. This is an intentional
-  empirical-vs-actuarial difference, not a discrepancy, and is why the
-  Officer/20 baseline is more negative here (≈ −$154K) than nb03a's
-  deterministic ≈ −$110K.
+- Note: nb05 centers COLA on the post-1947 CPI mean (~3.66%), the same
+  empirical basis as nb03b/nb04; nb03a's deterministic path uses the 2.75%
+  actuarial assumption. This is an intentional empirical-vs-actuarial
+  difference, not a discrepancy, and is why the Officer/20 baseline is
+  more negative here (≈ −$159K) than nb03a's deterministic ≈ −$110K.
 
 **Separation-distribution sensitivity (per-entrant only)**
 
