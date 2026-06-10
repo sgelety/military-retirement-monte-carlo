@@ -108,7 +108,11 @@ kernel.
   risk (a certainty-equivalent view would value the TSP lower). The
   government-cost side avoids this via the actuarial basis.
 - Death age uses SSA 2022 male tables with a normal approximation
-  (std 13 yr); female tables are in the data but not yet modeled.
+  (std 13 yr), matching the ~83%-male active force. A female-table
+  sensitivity in notebook 05 shifts the Officer/20 median ~\$31K
+  further toward High-Three — within the ±10-yr OAT band — and a
+  population-weighted blend moves the baseline by under \$6K, so
+  gender is not modeled as a full dimension.
 - Continuation pay (a mid-career BRS cash incentive) is excluded,
   which biases the comparison slightly against BRS.
 
