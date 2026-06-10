@@ -21,7 +21,9 @@ The project is implemented in Python using Jupyter Notebooks in VS Code.
 
 **Career-length scenarios (YOS):** Uniform 2-year spacing, per profile — Officers and PEOs: 4–38 (18 scenarios each); Enlisted: 4–28 (13 scenarios). Total: 49 valid (profile, sep_yos) combinations.
 
-**TSP contribution rates:** Member contributes 5% of basic pay under **both** systems — this is held constant to isolate the government-funded difference. BRS adds 1% automatic + 4% matching government contribution (10% total). High-Three has no government contribution (5% member only). Constants: `BRS_CONTRIB_RATE = 0.10`, `H3_MEMBER_RATE = 0.05` in `src/tsp_calcs.py`.
+**TSP contribution rates:** Member contributes 5% of basic pay under **both** systems — this is held constant to isolate the government-funded difference. BRS adds a 1% automatic government contribution from entry plus up to 4% matching beginning after 2 years of service (6% total in YOS 1–2, 10% from YOS 3). High-Three has no government contribution (5% member only). Functions: `brs_govt_rate(yos, member_rate)` / `brs_total_rate(yos, member_rate)` in `src/tsp_calcs.py`; steady-state constants `BRS_CONTRIB_RATE = 0.10`, `H3_MEMBER_RATE = 0.05`.
+
+**Dollar convention:** basic pay grows at the COLA rate (military raises assumed to track inflation) — fixed 2.75% in deterministic runs, the iteration's COLA draw in Monte Carlo — making the model internally consistent in nominal terms. All reported values are deflated by the price level at separation and expressed in **constant 2026 dollars**. (A frozen 2026 pay table mixed with nominal returns/discounting was found to overstate TSP relative to the pension and produced spurious BRS sign-flips for 26+ YOS careers.)
 
 **TSP investment return modeling — glide path approach:**
 - Accumulation phase (during service): year-by-year L Fund return based on years remaining to age 60
@@ -40,10 +42,10 @@ The project is implemented in Python using Jupyter Notebooks in VS Code.
 
 **Monte Carlo stochastic variables (all others held fixed within each scenario):**
 1. TSP investment returns (parameterized from TSP L Fund historical data)
-2. Inflation/COLA rates (parameterized from post-1947 CPI data — mean ≈ 3.66%, std ≈ 3.03% — used consistently in 03b/04/05; DoD Board of Actuaries long-term assumption is 2.75% as baseline reference)
-3. Life expectancy (drawn from SSA actuarial tables, stratified by age and gender)
+2. Inflation/COLA rates (parameterized from post-1947 CPI data — mean ≈ 3.66%, std ≈ 3.03% — used consistently in 03b/04/05; DoD Board of Actuaries long-term assumption is 2.75% as baseline reference). The COLA draw also drives basic-pay growth and the 2026-$ deflator, so it is shared across all components within an iteration.
+3. Life expectancy (Normal around the SSA 2022 male expected total age conditional on separation age, std 13 yr; female tables are available in the data and are a natural sensitivity extension)
 
-**Results reported in:** nominal dollars and net present value
+**Results reported in:** net present value at separation, expressed in constant 2026 dollars
 
 **Explicitly out of scope:** reserve component retirement, continuation pay, TSP withdrawal strategy, behavioral retention effects of BRS (not modeled as behavior — nb05 includes a mechanical what-if sensitivity to the separation distribution, which is a sensitivity test, not a behavioral prediction)
 
@@ -62,7 +64,7 @@ Raw data files are in `data/raw/`. Processed outputs go to `data/processed/`.
 - `life_expectancy.csv` — SSA 2022 actuarial table
 - `pay_profiles.csv` — (Profile, YOS, MonthlyPay); one row per career year per profile; **no SepYOS column** — notebooks filter with `YOS <= sep_yos` at query time
 - `high_three_matrix.csv` — Profile × SepYOS matrix of High-Three monthly base values on the uniform 49-scenario grid; reference output only — downstream notebooks recompute High-3 from `pay_profiles.csv` at query time
-- `deterministic_results.csv` — full lifetime value comparison under both systems for all 49 valid (profile, sep_yos) scenarios; output of 03a
+- `deterministic_results.csv` — full lifetime value comparison under both systems for all 49 valid (profile, sep_yos) scenarios, in constant 2026 dollars (`H3Annual`/`BRSAnnual` are nominal at separation); output of 03a
 - `mc_results.csv` — Monte Carlo percentile summary (p10/p25/p50/p75/p90/mean) for BRSAdv, H3Total, BRSTotal across all 49 scenarios; output of 03b
 - `fiscal_results.csv` — per-scenario government cost (H3_GovtCost, BRS_GovtCost, GovtTSP_PV, DoD_Savings) plus separation-weighted expected costs per entrant by profile; output of 04
 - `scenario_weights.csv` — (Profile, SepYOS, Weight) separation probabilities binned to the modeled scenarios, summing to 1 per profile; output of 04, consumed by nb05 section 4
@@ -126,17 +128,17 @@ Load and clean all raw data files. Output processed CSVs to `data/processed/`. K
 Build the full career pay series for each profile (one row per YOS, no scenario dimension). Compute the High-Three base (average of the 3 highest annual pay values) for each (profile, sep_yos) combination. Outputs `pay_profiles.csv` and `high_three_matrix.csv`.
 
 ### `03a_deterministic.ipynb`
-Deterministic (center-path) lifetime value calculation under both systems for all 49 valid scenarios. Uses fixed COLA (2.75%), discount rate (5.0%), glide-path L Fund means, and SSA 2022 male life expectancy. Validates the pension and TSP math before introducing stochastic variation. Outputs `deterministic_results.csv`.
+Deterministic (center-path) lifetime value calculation under both systems for all 49 valid scenarios. Uses fixed COLA / pay growth (2.75%), discount rate (5.0%), glide-path L Fund means, and SSA 2022 male life expectancy; values in constant 2026 dollars. Validates the pension and TSP math before introducing stochastic variation. Outputs `deterministic_results.csv`.
 
 ### `03b_monte_carlo.ipynb`
 Monte Carlo simulation adding stochastic variation to TSP returns, COLA, and life expectancy. Uses 20,000 iterations; validated via half-to-full convergence check (20K→40K shift < 1% of P10-P90 spread on Officer/20 YOS, the most volatile scenario). Report results at 10th, 25th, 50th, 75th, 90th percentiles plus mean. Outputs `mc_results.csv`.
 
 ### `04_government_fiscal.ipynb`
 Scale individual results to DoD aggregate cost.
-- Government TSP cost measured on **actuarial basis**: PV of contributions compounded at the 5% discount rate (not TSP market returns), matching the reference date used for pension NPV. This avoids a 2–2.7× overstatement of DoD's fiscal cost.
+- Government TSP cost measured on **actuarial basis**: PV of contributions compounded at the 5% discount rate (not TSP market returns), matching the reference date used for pension NPV. This avoids a 1.5–2.6× overstatement of DoD's fiscal cost.
 - Weight each YOS scenario by its DoD actuarial separation probability; sum to get expected government cost per entrant
-- Monte Carlo section adds stochastic COLA and life expectancy (N=20,000 iterations). COLA fit on post-1947 CPI, matching 03b. COLA draws are shared across all scenarios per iteration; death age is independent per scenario. `GovtTSP_PV` has no stochastic component under the actuarial basis.
-- Convergence validated via 20K→40K half-to-full check: max shift 0.12% of P10-P90 spread (Officer per-entrant savings, most volatile metric) — PASS at 1% threshold
+- Monte Carlo section adds stochastic COLA and life expectancy (N=20,000 iterations). COLA fit on post-1947 CPI, matching 03b. COLA draws are shared across all scenarios per iteration; death age is independent per scenario. The COLA draw drives pay growth, so the High-Three base and `GovtTSP_PV` are stochastic too; all values deflated to 2026 dollars per iteration.
+- Convergence validated via 20K→40K half-to-full check: max shift 0.08% of P10-P90 spread (Officer per-entrant savings, most volatile metric) — PASS at 1% threshold
 - Force-level scaling uses 18,000 officer + 140,000 enlisted annual accessions
 - Outputs `fiscal_results.csv` and `scenario_weights.csv`
 
@@ -156,7 +158,7 @@ Scale individual results to DoD aggregate cost.
   empirical basis as nb03b/nb04; nb03a's deterministic path uses the 2.75%
   actuarial assumption. This is an intentional empirical-vs-actuarial
   difference, not a discrepancy, and is why the Officer/20 baseline is
-  more negative here than nb03a's ≈ −$20K.
+  more negative here (≈ −$159K) than nb03a's deterministic ≈ −$110K.
 
 **Separation-distribution sensitivity (per-entrant only)**
 
@@ -226,9 +228,9 @@ Presentation:
 
 Keep these as importable .py modules, not inline in notebooks:
 - `pension_calcs.py` — `high_three_base`, `annual_pension_high3`, `annual_pension_brs` ✓
-- `tsp_calcs.py` — `tsp_at_separation(pay, entry_age, means, total_contrib_rate)`, `tsp_grow_to_60`, `compute_fund_means`, `select_fund`; exports `BRS_CONTRIB_RATE=0.10` and `H3_MEMBER_RATE=0.05` ✓
+- `tsp_calcs.py` — `tsp_at_separation(pay, entry_age, means, rate)` where `rate` is a float or callable(yos), `tsp_grow_to_60`, `compute_fund_means`, `select_fund`, `brs_govt_rate`, `brs_total_rate`; exports `BRS_CONTRIB_RATE=0.10` and `H3_MEMBER_RATE=0.05` (steady-state) ✓
 - `utils.py` — `npv_pension`, `pv_lump_sum`, `percentile_summary` ✓
-- `monte_carlo.py` — `fit_fund_stats`, `fit_cola_stats`, `npv_pension_vec`, `run_scenario`; exports `DEATH_AGE_STD=13.0` ✓
+- `monte_carlo.py` — `fit_fund_stats`, `fit_cola_stats`, `npv_pension_vec`, `grown_pay_matrix`, `high3_base_vec`, `govt_tsp_pv_vec`, `run_scenario(..., member_rate=0.05)` (outputs constant 2026 $); exports `DEATH_AGE_STD=13.0` ✓
 
 ---
 

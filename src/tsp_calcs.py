@@ -4,8 +4,10 @@ MEMBER_RATE = 0.05
 GOVT_AUTO = 0.01
 GOVT_MATCH_CAP = 0.04
 
-# Total annual contribution rates, assuming member contributes
-# MEMBER_RATE under both systems. Pass these to tsp_at_separation.
+# Steady-state total annual contribution rates (YOS 3+),
+# assuming the member contributes MEMBER_RATE under both
+# systems. Kept for printouts and quick reference; per-YOS
+# rates come from brs_total_rate below.
 BRS_CONTRIB_RATE = MEMBER_RATE + GOVT_AUTO + GOVT_MATCH_CAP  # 0.10
 H3_MEMBER_RATE = MEMBER_RATE                                  # 0.05
 
@@ -18,6 +20,25 @@ _GLIDE_PATH = [
     (10, "L 2030"),
     (0, "L Income"),
 ]
+
+
+def brs_govt_rate(yos, member_rate=MEMBER_RATE):
+    """
+    BRS government TSP contribution rate at a given YOS.
+
+    The 1% automatic contribution applies from entry (it
+    actually begins after 60 days; treated as year 1 here).
+    Matching (up to 4%) begins after 2 years of service,
+    i.e., from YOS 3 onward.
+    """
+    if yos <= 2:
+        return GOVT_AUTO
+    return GOVT_AUTO + min(member_rate, GOVT_MATCH_CAP)
+
+
+def brs_total_rate(yos, member_rate=MEMBER_RATE):
+    """Total BRS contribution rate (member + govt) at a YOS."""
+    return member_rate + brs_govt_rate(yos, member_rate)
 
 
 def select_fund(years_to_60):
@@ -45,34 +66,36 @@ def compute_fund_means(tsp_df):
     return {f: tsp_df[f].dropna().mean() / 100 for f in funds}
 
 
-def tsp_at_separation(
-    pay_series, entry_age, means, total_contrib_rate
-):
+def tsp_at_separation(pay_series, entry_age, means, rate):
     """
     TSP balance at end of service.
 
     Each year: balance = (balance + contributions) * (1 + r)
-    Contributions = total_contrib_rate * annual_pay.
-    Return r comes from the glide-path fund for that service year.
-
-    Pass BRS_CONTRIB_RATE for BRS or H3_MEMBER_RATE for High-Three.
+    Contributions = rate * annual_pay. Return r comes from the
+    glide-path fund for that service year.
 
     Parameters
     ----------
     pay_series : pd.Series  index=YOS, values=monthly_basic_pay
+                 (pass nominal pay if modeling pay growth)
     entry_age : int
     means : dict  {fund_name: mean_return_decimal}
-    total_contrib_rate : float
+    rate : float or callable
+        Total contribution rate. A float applies every year;
+        a callable is evaluated as rate(yos) — pass
+        brs_total_rate for BRS match-timing behavior, or
+        H3_MEMBER_RATE for High-Three.
 
     Returns
     -------
     float  TSP balance at separation
     """
+    rate_fn = rate if callable(rate) else (lambda yos: rate)
     balance = 0.0
     for yos, monthly_pay in pay_series.items():
         age = entry_age + yos - 1
         r = means[select_fund(max(0, 60 - age))]
-        contrib = monthly_pay * 12 * total_contrib_rate
+        contrib = monthly_pay * 12 * rate_fn(yos)
         balance = (balance + contrib) * (1 + r)
     return balance
 

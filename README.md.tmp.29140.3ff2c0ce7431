@@ -87,20 +87,5 @@ kernel.
   strategy, and behavioral retention effects (a mechanical
   separation-timing sensitivity is included instead).
 
-## Limitations
-
-- Annual returns are drawn i.i.d. from fitted normals (no serial
-  correlation or fat tails), and returns are drawn independently of
-  inflation; the Bull/Bear scenarios in notebook 05 partially probe
-  joint movements.
-- Individual-level TSP values discount expected risky returns at 5%,
-  a member's-expected-value perspective that does not haircut for
-  risk (a certainty-equivalent view would value the TSP lower). The
-  government-cost side avoids this via the actuarial basis.
-- Death age uses SSA 2022 male tables with a normal approximation
-  (std 13 yr); female tables are in the data but not yet modeled.
-- Continuation pay (a mid-career BRS cash incentive) is excluded,
-  which biases the comparison slightly against BRS.
-
 Full assumptions and data provenance are documented in
 [CLAUDE.md](CLAUDE.md).
