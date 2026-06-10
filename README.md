@@ -14,6 +14,10 @@ simulation. The analysis operates at two levels:
    DoD cost per annual accession cohort, weighted by actuarial
    separation probabilities.
 
+For a narrative walkthrough of the pipeline, the modeling decisions
+and their rationale, and where the answers stand, see
+[docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md).
+
 ## The policy question
 
 Under High-Three, a service member who separates before 20 years of
