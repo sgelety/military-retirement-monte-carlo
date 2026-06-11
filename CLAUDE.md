@@ -273,6 +273,14 @@ pension-cliff curve with the user's point marked. Run from repo root:
   decision: no paid key; Gemini free tier + built-in fallback).
 - System colors in the app: H3 dimgray, BRS crimson — deliberately
   disjoint from the profile palette.
+- Streamlit markdown treats `$...$` as LaTeX exactly like notebook
+  markdown: every dollar amount rendered via `st.markdown` /
+  `st.caption` must pass through the app's `esc_md` helper
+  (`st.metric` and dataframes are plain text — no escaping there).
+- A rank-timeline strip (horizontal bar of grade tenures, E grades
+  navajowhite / O grades lightsteelblue) sits under the snapshot
+  metrics; a native multi-handle slider for promotion input was
+  considered and rejected (needs a custom JS component).
 - Headless testing: `streamlit.testing.v1.AppTest` runs the app
   script and surfaces exceptions (`st.data_editor` returns its
   seeded default there, which exercises the typical-timing path).

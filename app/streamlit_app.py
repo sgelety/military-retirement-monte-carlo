@@ -40,6 +40,16 @@ def fmt_usd(x):
     return f"{sign}${abs(x):,.0f}"
 
 
+def esc_md(text):
+    """Escape $ so paired dollars don't render as LaTeX math.
+
+    Streamlit markdown (st.markdown / st.caption) treats
+    $...$ as math, same as notebook markdown — escape any
+    dollar amounts before rendering.
+    """
+    return text.replace("$", "\\$")
+
+
 @st.cache_resource
 def get_inputs():
     return sc.load_inputs()
@@ -111,8 +121,10 @@ member_rate = member_pct / 100.0
 with st.sidebar.expander("Adjust my promotion timeline"):
     st.caption(
         "Typical timing shown. Edit the YOS at which you "
-        "reach each grade, or delete rows for ranks you "
-        "won't reach (e.g., topping out at E-7)."
+        "reach each grade. To remove a rank you won't reach "
+        "(e.g., topping out at E-7): tick the checkbox at "
+        "the left edge of its row, then press Delete or the "
+        "trash icon in the table's toolbar."
     )
     if "editor_reset" not in st.session_state:
         st.session_state["editor_reset"] = 0
@@ -215,6 +227,39 @@ c4.metric(
     "Final monthly basic pay (2026 $)",
     fmt_usd(pay_full.loc[sep_yos]),
 )
+# Rank timeline: how long the member holds each grade
+runs = []
+for yos, grade in grades.loc[:sep_yos].items():
+    if runs and runs[-1][0] == grade:
+        runs[-1][2] = yos
+    else:
+        runs.append([grade, yos, yos])
+
+fig, ax = plt.subplots(figsize=(10, 0.9))
+for grade, start, end in runs:
+    color = (
+        "navajowhite"
+        if str(grade).startswith("E")
+        else "lightsteelblue"
+    )
+    ax.barh(
+        0, end - start + 1, left=start, height=0.8,
+        color=color, edgecolor="white",
+    )
+    ax.text(
+        (start + end + 1) / 2, 0, str(grade),
+        ha="center", va="center", fontsize=9,
+    )
+ax.set_xlim(1, sep_yos + 1)
+ax.set_yticks([])
+ax.set_xlabel("Years of Service", fontsize=9)
+for side in ("top", "right", "left"):
+    ax.spines[side].set_visible(False)
+fig.tight_layout()
+st.pyplot(fig)
+plt.close(fig)
+st.caption(f"Rank timeline ({timing_label})")
+
 if sep_yos < 20:
     st.info(
         f"Separating at {sep_yos} years — **before the "
@@ -236,11 +281,11 @@ with left:
         "Lifetime value difference (BRS − H3), median",
         fmt_usd(adv["p50"]),
     )
-    st.caption(
+    st.caption(esc_md(
         f"Monte Carlo P10–P90: {fmt_usd(adv['p10'])} "
         f"to {fmt_usd(adv['p90'])} · mean "
         f"{fmt_usd(adv['mean'])} · N={n_iter:,}"
-    )
+    ))
     cm = mc["component_means"]
     comp = pd.DataFrame(
         {
@@ -285,7 +330,7 @@ with right:
         "pension NPV plus government TSP contributions "
         "compounded at the discount rate."
     )
-    st.markdown(
+    st.markdown(esc_md(
         f"**Across the force** (typical "
         f"{sc.PROFILE_LABELS[profile].lower()} careers, "
         "DoD separation rates):\n"
@@ -299,7 +344,7 @@ with right:
         f"{fmt_usd(ctx['expected_savings'])} "
         f"({fmt_usd(ctx['expected_h3_cost'])} → "
         f"{fmt_usd(ctx['expected_brs_cost'])})"
-    )
+    ))
 
 # ----------------------------------------------------------
 # Charts
@@ -404,7 +449,7 @@ if st.button("Explain my scenario in plain language"):
             det=det.to_dict(),
             ctx=ctx,
         )
-    st.markdown(text)
+    st.markdown(esc_md(text))
     st.caption(source)
 
 # ----------------------------------------------------------
