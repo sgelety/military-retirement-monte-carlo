@@ -27,6 +27,11 @@ from explain import explain_scenario  # noqa: E402
 # profile palette (darkorange / forestgreen / steelblue)
 H3_COLOR = "dimgray"
 BRS_COLOR = "crimson"
+PROFILE_COLORS = {
+    "Enlisted": "darkorange",
+    "PriorEnlistedOfficer": "forestgreen",
+    "Officer": "steelblue",
+}
 
 st.set_page_config(
     page_title="BRS vs. High-Three Explorer",
@@ -56,32 +61,37 @@ def get_inputs():
 
 
 @st.cache_data
-def cached_curve(points, max_yos, member_rate, disc):
+def cached_curve(profile, points, max_yos, member_rate, disc,
+                 outlook):
     inputs = get_inputs()
     pay, _ = sc.pay_from_points(
         list(points), max_yos, inputs["basic_pay"]
     )
-    entry = sc.ENTRY_AGE[st.session_state["profile"]]
+    means = sc.shift_fund_means(
+        inputs["fund_means"], sc.REGIME_SHIFTS[outlook]
+    )
     return sc.deterministic_curve(
-        pay, entry, inputs["life_exp"],
-        inputs["fund_means"], member_rate, disc,
+        pay, sc.ENTRY_AGE[profile], inputs["life_exp"],
+        means, member_rate, disc,
     )
 
 
 @st.cache_data
-def cached_mc(
-    profile, points, max_yos, sep_yos, member_rate, disc,
-    n_iter,
+def cached_mc_curve(
+    profile, points, max_yos, member_rate, disc, n_iter,
+    outlook,
 ):
     inputs = get_inputs()
     pay, _ = sc.pay_from_points(
         list(points), max_yos, inputs["basic_pay"]
     )
-    return sc.mc_at_point(
-        profile, pay, sc.ENTRY_AGE[profile], sep_yos,
-        inputs["life_exp"], inputs["fund_stats"],
-        inputs["cola_stats"], member_rate, disc,
-        n_iter=n_iter,
+    stats = sc.shift_fund_stats(
+        inputs["fund_stats"], sc.REGIME_SHIFTS[outlook]
+    )
+    return sc.mc_curve(
+        profile, pay, sc.ENTRY_AGE[profile],
+        inputs["life_exp"], stats, inputs["cola_stats"],
+        member_rate, disc, n_iter=n_iter,
     )
 
 
@@ -122,6 +132,23 @@ member_pct = st.sidebar.slider(
     ),
 )
 member_rate = member_pct / 100.0
+
+outlook = st.sidebar.radio(
+    "Market outlook",
+    list(sc.REGIME_SHIFTS),
+    index=1,
+    help=(
+        "Shifts the average TSP return 2 percentage points "
+        "below or above its long-run history — sustained for "
+        "your entire career. This is the return stress from "
+        "the analysis's Bear/Bull scenarios (which also vary "
+        "inflation and discount rate; here only returns "
+        "move). The simulation still varies year-to-year "
+        "luck around that average. The government ledger "
+        "doesn't move: DoD's cost is valued at the discount "
+        "rate, not market returns."
+    ),
+)
 
 with st.sidebar.expander("Adjust my promotion timeline"):
     st.caption(
@@ -200,10 +227,15 @@ timing_label = (
     "your timeline" if is_custom else "typical timing"
 )
 
-curve = cached_curve(points_key, max_yos, member_rate, disc)
-mc = cached_mc(
-    profile, points_key, max_yos, sep_yos, member_rate,
-    disc, n_iter,
+curve = cached_curve(
+    profile, points_key, max_yos, member_rate, disc, outlook
+)
+mcc = cached_mc_curve(
+    profile, points_key, max_yos, member_rate, disc,
+    n_iter, outlook,
+)
+mc = sc.mc_from_curve_row(
+    mcc.set_index("SepYOS").loc[sep_yos]
 )
 det = curve.set_index("SepYOS").loc[sep_yos]
 ctx = sc.population_context(inputs, profile, sep_yos)
@@ -277,6 +309,14 @@ with st.expander("How this works — where these numbers come from"):
         "That's also why the headline difference doesn't move "
         "above 5%: the match is maxed, and beyond that it's "
         "your money under both systems.\n\n"
+        "**The market-outlook setting** answers a different "
+        "question than the shaded bands. The bands show *luck* "
+        "— good and bad return sequences around the historical "
+        "average. The outlook setting shifts the *average "
+        "itself* by 2 percentage points, sustained for your "
+        "whole career — a decades-long bull or bear regime. "
+        "It's a strong assumption, and it's the strongest "
+        "single lever on the answer for 20+ year careers.\n\n"
         "**The government side** values the same career the way "
         "an actuary would: the pension promise discounted at "
         "5%, plus the government's TSP deposits compounded at "
@@ -407,7 +447,9 @@ with right:
     st.caption(
         "Deterministic actuarial basis (notebook 04): "
         "pension NPV plus government TSP contributions "
-        "compounded at the discount rate."
+        "compounded at the discount rate. The market-outlook "
+        "setting doesn't move this side — DoD's cost is "
+        "valued at the discount rate, not market returns."
     )
     st.markdown(esc_md(
         f"**Across the force** (typical "
@@ -429,29 +471,34 @@ with right:
 # Charts
 # ----------------------------------------------------------
 st.subheader("Where your career sits on the cliff")
+st.caption(
+    f"Market outlook: {outlook}. Lines are Monte Carlo "
+    "medians across every possible separation year; shaded "
+    f"bands show the spread over {n_iter:,} simulated "
+    "futures."
+)
 ch1, ch2 = st.columns(2)
+x = mcc["SepYOS"]
 
 with ch1:
     fig, ax = plt.subplots(figsize=(7, 4.2))
-    ax.plot(
-        curve["SepYOS"], curve["H3Total"] / 1000,
-        color=H3_COLOR, linewidth=2, label="High-Three",
-    )
-    ax.plot(
-        curve["SepYOS"], curve["BRSTotal"] / 1000,
-        color=BRS_COLOR, linewidth=2, label="BRS",
-    )
-    for key, color in [
-        ("h3_total", H3_COLOR), ("brs_total", BRS_COLOR),
+    for key, color, label in [
+        ("h3_total", H3_COLOR, "High-Three"),
+        ("brs_total", BRS_COLOR, "BRS"),
     ]:
-        s = mc[key]
-        ax.errorbar(
-            [sep_yos], [s["p50"] / 1000],
-            yerr=[
-                [(s["p50"] - s["p10"]) / 1000],
-                [(s["p90"] - s["p50"]) / 1000],
-            ],
-            fmt="o", color=color, capsize=4,
+        ax.fill_between(
+            x,
+            mcc[f"{key}_p10"] / 1000,
+            mcc[f"{key}_p90"] / 1000,
+            alpha=0.15, color=color,
+        )
+        ax.plot(
+            x, mcc[f"{key}_p50"] / 1000,
+            color=color, lw=2, label=label,
+        )
+        ax.plot(
+            [sep_yos], [mc[key]["p50"] / 1000],
+            "o", color=color,
         )
     ax.axvline(
         sep_yos, color="black", linewidth=0.8,
@@ -460,9 +507,8 @@ with ch1:
     ax.set_xlabel("Years of Service at Separation")
     ax.set_ylabel("Lifetime Value (2026 $ thousands)")
     ax.set_title(
-        "Lifetime Value by System (deterministic path;\n"
-        "dots: Monte Carlo median and P10–P90 at your "
-        "point)"
+        "Lifetime Value by System\n"
+        "(median; shaded: P10–P90)"
     )
     ax.yaxis.set_major_formatter(
         plt.FuncFormatter(lambda x, _: f"${x:,.0f}K")
@@ -474,23 +520,34 @@ with ch1:
     plt.close(fig)
 
 with ch2:
+    pcolor = PROFILE_COLORS[profile]
     fig, ax = plt.subplots(figsize=(7, 4.2))
+    ax.fill_between(
+        x,
+        mcc["brs_adv_p10"] / 1000,
+        mcc["brs_adv_p90"] / 1000,
+        alpha=0.18, color=pcolor, label="P10–P90",
+    )
+    ax.fill_between(
+        x,
+        mcc["brs_adv_p25"] / 1000,
+        mcc["brs_adv_p75"] / 1000,
+        alpha=0.38, color=pcolor, label="P25–P75",
+    )
+    ax.plot(
+        x, mcc["brs_adv_p50"] / 1000,
+        color=pcolor, lw=2, label="Median",
+    )
     ax.plot(
         curve["SepYOS"], curve["BRSAdv"] / 1000,
-        color="black", linewidth=2,
+        "k--", lw=1.2, label="Deterministic",
     )
-    adv = mc["brs_adv"]
-    ax.errorbar(
-        [sep_yos], [adv["p50"] / 1000],
-        yerr=[
-            [(adv["p50"] - adv["p10"]) / 1000],
-            [(adv["p90"] - adv["p50"]) / 1000],
-        ],
-        fmt="o", color="black", capsize=4,
+    ax.plot(
+        [sep_yos], [mc["brs_adv"]["p50"] / 1000],
+        "o", color="black",
     )
-    ax.axhline(
-        0, color="gray", linewidth=0.8, linestyle="--"
-    )
+    ax.axhline(0, color="black", linewidth=0.8,
+               linestyle=":")
     ax.axvline(
         sep_yos, color="black", linewidth=0.8,
         linestyle=":",
@@ -506,6 +563,7 @@ with ch2:
     ax.yaxis.set_major_formatter(
         plt.FuncFormatter(lambda x, _: f"${x:,.0f}K")
     )
+    ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     st.pyplot(fig)
@@ -551,6 +609,13 @@ with st.expander("Model assumptions & limitations"):
         "match (from YOS 3). Returns follow the L Fund "
         "glide path to age 60, then drawdown pricing at "
         "the discount rate.\n"
+        "- **Market outlook**: a uniform ±2 pp shift of all "
+        "glide-path mean returns — the return component of "
+        "notebook 05's Bull/Bear regime stress (the notebook "
+        "scenarios additionally vary COLA and discount rate; "
+        "here the discount rate is its own Advanced control). "
+        "A separate construct from the Monte Carlo's "
+        "year-to-year variation.\n"
         "- **Promotion timeline**: rank is asserted by you "
         "(or the typical table), not predicted; pay is "
         "priced from the 2026 DFAS table.\n"

@@ -238,9 +238,18 @@ Presentation:
 Streamlit explorer ("your slice of the \$5B"): for one user-chosen
 career it shows the member ledger (BRS − H3 difference, live
 `run_scenario` Monte Carlo at N=20,000) and the government ledger
-(deterministic actuarial cost under each system), plus the
-pension-cliff curve with the user's point marked. Run from repo root:
-`streamlit run app/streamlit_app.py`.
+(deterministic actuarial cost under each system), plus nb03b-style
+fan charts (median + P10–P90 / P25–P75 bands across every
+separation year, deterministic dashed overlay, user's point
+marked). The MC runs as a full curve — one seeded `run_scenario`
+per YOS (`mc_curve`, seed = SEED + sep_yos), cached per input
+combo (~3 s at 20K iterations; separation-slider moves are then
+free). A **Market outlook** radio applies the ±2 pp return-regime
+stress from nb05's Bull/Bear scenarios (returns only — the
+notebook scenarios also bundle COLA/discount changes; the app
+keeps discount as its own Advanced control). Outlook deliberately
+does not move the government ledger (actuarial basis). Run from
+repo root: `streamlit run app/streamlit_app.py`.
 
 - **No new modeling.** `app/scenario_calcs.py` recomputes everything
   with the existing `src/` functions; member math mirrors nb03a,

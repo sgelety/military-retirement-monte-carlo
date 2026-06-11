@@ -252,11 +252,37 @@ def deterministic_curve(
     return pd.DataFrame(rows)
 
 
-def mc_at_point(
+# Market-outlook regimes: a sustained shift of all glide-path
+# fund mean returns, matching notebook 05's Bear/Base/Bull
+# scenario construct (regime stress, distinct from the MC's
+# year-to-year randomness).
+REGIME_SHIFTS = {
+    "Pessimistic (−2 pp)": -0.02,
+    "Historical average": 0.0,
+    "Optimistic (+2 pp)": 0.02,
+}
+
+_PCTS = ["p10", "p25", "p50", "p75", "p90", "mean"]
+_MC_KEYS = ["brs_adv", "h3_total", "brs_total"]
+
+
+def shift_fund_stats(fund_stats, delta):
+    """Fund stats with all mean returns shifted by delta."""
+    return {
+        f: {"mean": s["mean"] + delta, "std": s["std"]}
+        for f, s in fund_stats.items()
+    }
+
+
+def shift_fund_means(fund_means, delta):
+    """Deterministic fund means shifted by delta."""
+    return {f: m + delta for f, m in fund_means.items()}
+
+
+def mc_curve(
     profile,
     pay_full,
     entry_age,
-    sep_yos,
     life_exp,
     fund_stats,
     cola_stats,
@@ -266,46 +292,72 @@ def mc_at_point(
     seed=SEED,
 ):
     """
-    Monte Carlo at the selected point on a custom pay series.
+    Monte Carlo at every separation YOS on a pay series.
 
-    Thin wrapper over src.monte_carlo.run_scenario; returns
-    percentile summaries plus additive component means.
+    One run_scenario call per YOS (seeded per YOS, so the
+    curve is stable as sliders move). Returns a DataFrame
+    with percentile columns for brs_adv / h3_total /
+    brs_total plus additive component means per row.
     """
-    pay = pay_full.loc[:sep_yos]
     pay_df = pd.DataFrame(
         {
             "Profile": profile,
-            "YOS": pay.index,
-            "MonthlyPay": pay.values,
+            "YOS": pay_full.index,
+            "MonthlyPay": pay_full.values,
         }
     )
-    res = run_scenario(
-        profile,
-        sep_yos,
-        pay_df,
-        life_exp,
-        fund_stats,
-        cola_stats,
-        {profile: entry_age},
-        n_iter=n_iter,
-        discount_rate=discount_rate,
-        seed=seed,
-        member_rate=member_rate,
-    )
-    out = {
-        key: percentile_summary(res[key])
-        for key in ["brs_adv", "h3_total", "brs_total"]
-    }
-    # Means are additive across components; medians are not.
-    out["component_means"] = {
-        "h3_pension": float(res["h3_pension_npv"].mean()),
-        "brs_pension": float(res["brs_pension_npv"].mean()),
-        "member_tsp": float(res["h3_tsp_pv"].mean()),
-        "govt_tsp": float(
+    rows = []
+    for sep_yos in range(
+        MIN_SEP_YOS, int(pay_full.index.max()) + 1
+    ):
+        res = run_scenario(
+            profile,
+            sep_yos,
+            pay_df,
+            life_exp,
+            fund_stats,
+            cola_stats,
+            {profile: entry_age},
+            n_iter=n_iter,
+            discount_rate=discount_rate,
+            seed=seed + sep_yos,
+            member_rate=member_rate,
+        )
+        row = {"SepYOS": sep_yos}
+        for key in _MC_KEYS:
+            summ = percentile_summary(res[key])
+            for p in _PCTS:
+                row[f"{key}_{p}"] = summ[p]
+        # Means are additive across components; medians aren't.
+        row["h3_pension_mean"] = float(
+            res["h3_pension_npv"].mean()
+        )
+        row["brs_pension_mean"] = float(
+            res["brs_pension_npv"].mean()
+        )
+        row["member_tsp_mean"] = float(
+            res["h3_tsp_pv"].mean()
+        )
+        row["govt_tsp_mean"] = float(
             (res["brs_tsp_pv"] - res["h3_tsp_pv"]).mean()
-        ),
-        "h3_total": float(res["h3_total"].mean()),
-        "brs_total": float(res["brs_total"].mean()),
+        )
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def mc_from_curve_row(row):
+    """One mc_curve row as the nested dict explain.py expects."""
+    out = {
+        key: {p: float(row[f"{key}_{p}"]) for p in _PCTS}
+        for key in _MC_KEYS
+    }
+    out["component_means"] = {
+        "h3_pension": float(row["h3_pension_mean"]),
+        "brs_pension": float(row["brs_pension_mean"]),
+        "member_tsp": float(row["member_tsp_mean"]),
+        "govt_tsp": float(row["govt_tsp_mean"]),
+        "h3_total": float(row["h3_total_mean"]),
+        "brs_total": float(row["brs_total_mean"]),
     }
     return out
 
