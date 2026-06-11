@@ -232,10 +232,54 @@ Presentation:
 
 ---
 
+## Interactive App (`app/` directory)
+
+Streamlit explorer ("your slice of the \$5B"): for one user-chosen
+career it shows the member ledger (BRS − H3 difference, live
+`run_scenario` Monte Carlo at N=20,000) and the government ledger
+(deterministic actuarial cost under each system), plus the
+pension-cliff curve with the user's point marked. Run from repo root:
+`streamlit run app/streamlit_app.py`.
+
+- **No new modeling.** `app/scenario_calcs.py` recomputes everything
+  with the existing `src/` functions; member math mirrors nb03a,
+  government cost mirrors nb04. On the default timelines it
+  reproduces `deterministic_results.csv` and `fiscal_results.csv` to
+  float precision (validated at ~1e-10).
+- Separation YOS is a 1-year-step slider (4 to the statutory max):
+  the 52-scenario grid only constrains the *precomputed* CSVs;
+  `run_scenario` works at any integer YOS since `pay_profiles.csv`
+  has every career year.
+- **Custom promotion timelines:** the sidebar editor seeds from
+  `promotion_timing.csv` pin-points; users can shift promotion years
+  or delete rows ("top out at E-7"). Helpers live in
+  `src/pay_builder.py`; validation rejects non-monotonic timelines
+  and grade/YOS combos the pay table doesn't support. Rank is
+  asserted by the user, never predicted. The pay table is filled
+  through YOS 40 for every grade, so held junior grades price fine.
+- Force-wide context stats (spending split, share reaching the
+  user's YOS, expected per-entrant savings) come from nb04's
+  persisted `fiscal_results.csv` + `scenario_weights.csv` and always
+  describe the *standard* profiles — a custom timeline changes the
+  user's ledgers only.
+- **Claude explanation layer** (`app/explain.py`): one Messages API
+  call (model `claude-opus-4-8`) narrating the computed numbers
+  under the neutral framing rules; never invents figures. Needs
+  `ANTHROPIC_API_KEY` in the environment; the numeric app degrades
+  gracefully without it.
+- System colors in the app: H3 dimgray, BRS crimson — deliberately
+  disjoint from the profile palette.
+- Headless testing: `streamlit.testing.v1.AppTest` runs the app
+  script and surfaces exceptions (`st.data_editor` returns its
+  seeded default there, which exercises the typical-timing path).
+
+---
+
 ## Reusable Functions (src/ directory)
 
 Keep these as importable .py modules, not inline in notebooks:
 - `pension_calcs.py` — `high_three_base`, `annual_pension_high3`, `annual_pension_brs` ✓
+- `pay_builder.py` — `lookup_pay`, `build_pay_series` (extracted from nb02 unchanged; nb02 imports them), plus app-facing timeline helpers `promotion_points`, `grades_from_points`, `pay_series_from_grades` ✓
 - `tsp_calcs.py` — `tsp_at_separation(pay, entry_age, means, rate)` where `rate` is a float or callable(yos), `tsp_grow_to_60`, `compute_fund_means`, `select_fund`, `brs_govt_rate`, `brs_total_rate`; exports `BRS_CONTRIB_RATE=0.10` and `H3_MEMBER_RATE=0.05` (steady-state) ✓
 - `utils.py` — `npv_pension`, `pv_lump_sum`, `percentile_summary` ✓
 - `monte_carlo.py` — `fit_fund_stats`, `fit_cola_stats`, `npv_pension_vec`, `grown_pay_matrix`, `high3_base_vec`, `govt_tsp_pv_vec`, `run_scenario(..., member_rate=0.05)` (outputs constant 2026 $); exports `DEATH_AGE_STD=13.0` ✓
@@ -247,5 +291,7 @@ Keep these as importable .py modules, not inline in notebooks:
 - `numpy`, `scipy` — numerical computation, statistical distributions
 - `pandas` — data manipulation
 - `matplotlib` — visualization
+- `streamlit` — interactive app (`app/` only)
+- `anthropic` — Claude explanation layer (`app/explain.py` only)
 - Pinned versions in `requirements.txt` (seaborn/statsmodels turned out
   not to be needed and are not installed)

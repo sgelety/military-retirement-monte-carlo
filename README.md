@@ -60,7 +60,8 @@ sensitivity analyses.
 | `notebooks/03b_monte_carlo.ipynb` | Stochastic returns, COLA, life expectancy (N=20,000) |
 | `notebooks/04_government_fiscal.ipynb` | DoD cost per entrant and per cohort |
 | `notebooks/05_sensitivity_analysis.ipynb` | OAT tornado, scenario analysis, separation what-if |
-| `src/` | Importable modules: pension/TSP math, NPV utilities, MC engine |
+| `src/` | Importable modules: pension/TSP math, pay-series builder, NPV utilities, MC engine |
+| `app/` | Interactive Streamlit explorer (see below) |
 | `data/raw/` | Source data (DFAS pay table, DoD actuarial rates, TSP returns, CPI, SSA life tables) |
 | `data/processed/` | Cleaned inputs and result CSVs produced by the notebooks |
 
@@ -78,6 +79,30 @@ pip install -r requirements.txt
 
 Open the notebooks in VS Code or Jupyter and select the `.venv`
 kernel.
+
+## Interactive explorer
+
+A Streamlit app shows both sides of the ledger for any single
+career — what the system change is worth to the member (live
+Monte Carlo, N=20,000) and what that career costs the government
+under each system — plus where it sits on the pension-cliff curve:
+
+```
+streamlit run app/streamlit_app.py
+```
+
+- Inputs: career profile, separation year (any year, not just the
+  notebook grid), TSP contribution rate, and an editable promotion
+  timeline (shift promotion years, or top out at a rank).
+- All numbers are recomputed with the same `src/` functions the
+  notebooks use; on the default timelines the app reproduces the
+  committed `deterministic_results.csv` / `fiscal_results.csv`
+  values exactly.
+- An optional **"Explain my numbers"** button sends the computed
+  results to the Claude API (model `claude-opus-4-8`) for a
+  plain-language narrative under the project's neutral framing
+  rules. It requires the `ANTHROPIC_API_KEY` environment variable;
+  everything else works offline.
 
 ## Key modeling choices
 
