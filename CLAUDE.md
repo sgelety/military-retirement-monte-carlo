@@ -260,6 +260,10 @@ repo root: `streamlit run app/streamlit_app.py`.
   the 52-scenario grid only constrains the *precomputed* CSVs;
   `run_scenario` works at any integer YOS since `pay_profiles.csv`
   has every career year.
+- **Entry age is user-adjustable** (17–40, per-profile defaults
+  18/18/22 via per-profile widget keys): flows through to the
+  glide path, growth-to-60 window, and life-expectancy lookup.
+  `run_scenario` always supported it; the app just exposes it.
 - **Custom promotion timelines:** the sidebar editor seeds from
   `promotion_timing.csv` pin-points; users can shift promotion years
   or delete rows ("top out at E-7"). Helpers live in

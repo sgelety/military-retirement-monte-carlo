@@ -61,8 +61,8 @@ def get_inputs():
 
 
 @st.cache_data
-def cached_curve(profile, points, max_yos, member_rate, disc,
-                 outlook):
+def cached_curve(profile, points, max_yos, entry_age,
+                 member_rate, disc, outlook):
     inputs = get_inputs()
     pay, _ = sc.pay_from_points(
         list(points), max_yos, inputs["basic_pay"]
@@ -71,15 +71,15 @@ def cached_curve(profile, points, max_yos, member_rate, disc,
         inputs["fund_means"], sc.REGIME_SHIFTS[outlook]
     )
     return sc.deterministic_curve(
-        pay, sc.ENTRY_AGE[profile], inputs["life_exp"],
+        pay, entry_age, inputs["life_exp"],
         means, member_rate, disc,
     )
 
 
 @st.cache_data
 def cached_mc_curve(
-    profile, points, max_yos, member_rate, disc, n_iter,
-    outlook,
+    profile, points, max_yos, entry_age, member_rate, disc,
+    n_iter, outlook,
 ):
     inputs = get_inputs()
     pay, _ = sc.pay_from_points(
@@ -89,7 +89,7 @@ def cached_mc_curve(
         inputs["fund_stats"], sc.REGIME_SHIFTS[outlook]
     )
     return sc.mc_curve(
-        profile, pay, sc.ENTRY_AGE[profile],
+        profile, pay, entry_age,
         inputs["life_exp"], stats, inputs["cola_stats"],
         member_rate, disc, n_iter=n_iter,
     )
@@ -116,6 +116,23 @@ sep_yos = st.sidebar.slider(
     max_value=max_yos,
     value=min(20, max_yos),
     step=1,
+)
+
+entry_age = st.sidebar.number_input(
+    "Age when you entered service",
+    min_value=17, max_value=40,
+    value=sc.ENTRY_AGE[profile],
+    step=1,
+    key=f"entry_age_{profile}",
+    help=(
+        "Drives your age at every point of the career: the "
+        "TSP glide path (how long your money rides the "
+        "aggressive funds before age 60), the growth window "
+        "between separation and 60, and the life-expectancy "
+        "lookup behind the pension value. For prior-enlisted "
+        "officers this is the age you enlisted — "
+        "commissioning happens at the timeline's YOS."
+    ),
 )
 
 member_pct = st.sidebar.slider(
@@ -220,7 +237,6 @@ except ValueError as err:
     st.stop()
 
 points_key = tuple(points)
-entry_age = sc.ENTRY_AGE[profile]
 sep_age = entry_age + sep_yos
 rank_at_sep = grades.loc[sep_yos]
 timing_label = (
@@ -228,11 +244,12 @@ timing_label = (
 )
 
 curve = cached_curve(
-    profile, points_key, max_yos, member_rate, disc, outlook
+    profile, points_key, max_yos, entry_age, member_rate,
+    disc, outlook,
 )
 mcc = cached_mc_curve(
-    profile, points_key, max_yos, member_rate, disc,
-    n_iter, outlook,
+    profile, points_key, max_yos, entry_age, member_rate,
+    disc, n_iter, outlook,
 )
 mc = sc.mc_from_curve_row(
     mcc.set_index("SepYOS").loc[sep_yos]
@@ -619,6 +636,11 @@ with st.expander("Model assumptions & limitations"):
         "- **Promotion timeline**: rank is asserted by you "
         "(or the typical table), not predicted; pay is "
         "priced from the 2026 DFAS table.\n"
+        "- **Entry age** (default 18 enlisted / 22 officer / "
+        "18 prior-enlisted) shifts every age-keyed input: "
+        "the TSP glide path, the growth window to 60, and "
+        "the life-expectancy lookup. Separations past age "
+        "60 are handled (no growth window).\n"
         "- **Out of scope**: reserve retirement, "
         "continuation pay, TSP withdrawal strategy, and "
         "behavioral retention effects.\n"
