@@ -28,12 +28,23 @@ def brs_govt_rate(yos, member_rate=MEMBER_RATE):
 
     The 1% automatic contribution applies from entry (it
     actually begins after 60 days; treated as year 1 here).
-    Matching (up to 4%) begins after 2 years of service,
-    i.e., from YOS 3 onward.
+    Matching begins after 2 years of service (YOS 3 onward)
+    and follows the statutory tier schedule:
+    dollar-for-dollar on the first 3% the member contributes,
+    then 50 cents per dollar on the next 2% — so the match
+    maxes out at 4% when the member contributes 5%.
+
+    At member rates of 0-3%, 5%, and above, this equals the
+    simpler min(member_rate, 4%); the schedules differ only
+    between 3% and 5% (e.g., a 4% contribution draws a 3.5%
+    match, not 4%).
     """
     if yos <= 2:
         return GOVT_AUTO
-    return GOVT_AUTO + min(member_rate, GOVT_MATCH_CAP)
+    match = min(member_rate, 0.03) + 0.5 * (
+        min(member_rate, 0.05) - min(member_rate, 0.03)
+    )
+    return GOVT_AUTO + match
 
 
 def brs_total_rate(yos, member_rate=MEMBER_RATE):

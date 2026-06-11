@@ -113,7 +113,12 @@ member_pct = st.sidebar.slider(
     min_value=0, max_value=10, value=5, step=1,
     help=(
         "Held equal under both systems to isolate the "
-        "government-funded difference. BRS matches up to 4%."
+        "government-funded difference. BRS adds a 1% "
+        "automatic government contribution from entry, plus "
+        "matching from year 3: dollar-for-dollar on your "
+        "first 3%, then 50 cents per dollar on the next 2% "
+        "— the full 4% match (5% total government) requires "
+        "contributing at least 5%."
     ),
 )
 member_rate = member_pct / 100.0
