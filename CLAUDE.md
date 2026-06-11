@@ -262,11 +262,15 @@ pension-cliff curve with the user's point marked. Run from repo root:
   persisted `fiscal_results.csv` + `scenario_weights.csv` and always
   describe the *standard* profiles — a custom timeline changes the
   user's ledgers only.
-- **Claude explanation layer** (`app/explain.py`): one Messages API
-  call (model `claude-opus-4-8`) narrating the computed numbers
-  under the neutral framing rules; never invents figures. Needs
-  `ANTHROPIC_API_KEY` in the environment; the numeric app degrades
-  gracefully without it.
+- **Explanation layer** (`app/explain.py`), two tiers so the button
+  always works: (1) Gemini 2.5 Flash via REST (free API tier; reads
+  `GEMINI_API_KEY`/`GOOGLE_API_KEY` from env) narrating the computed
+  numbers under the neutral framing rules, never inventing figures;
+  (2) a deterministic built-in summary generated locally from the
+  same numbers as the fallback on any API failure / missing key —
+  chosen so a public deployment never has a dead or billing-risky
+  feature. The Anthropic API is deliberately not used (user
+  decision: no paid key; Gemini free tier + built-in fallback).
 - System colors in the app: H3 dimgray, BRS crimson — deliberately
   disjoint from the profile palette.
 - Headless testing: `streamlit.testing.v1.AppTest` runs the app
@@ -292,6 +296,6 @@ Keep these as importable .py modules, not inline in notebooks:
 - `pandas` — data manipulation
 - `matplotlib` — visualization
 - `streamlit` — interactive app (`app/` only)
-- `anthropic` — Claude explanation layer (`app/explain.py` only)
+- `requests` — Gemini REST call in `app/explain.py` only
 - Pinned versions in `requirements.txt` (seaborn/statsmodels turned out
   not to be needed and are not installed)

@@ -21,7 +21,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import scenario_calcs as sc  # noqa: E402
-from explain import explain_scenario, explainer_status  # noqa: E402
+from explain import explain_scenario  # noqa: E402
 
 # System colors — deliberately distinct from the project's
 # profile palette (darkorange / forestgreen / steelblue)
@@ -388,15 +388,12 @@ with ch2:
     plt.close(fig)
 
 # ----------------------------------------------------------
-# Plain-language explanation (Claude)
+# Plain-language explanation (Gemini, built-in fallback)
 # ----------------------------------------------------------
 st.subheader("Explain my numbers")
-status = explainer_status()
-if status is not None:
-    st.caption(status)
-elif st.button("Explain my scenario in plain language"):
-    with st.spinner("Asking Claude..."):
-        text = explain_scenario(
+if st.button("Explain my scenario in plain language"):
+    with st.spinner("Writing explanation..."):
+        text, source = explain_scenario(
             profile_label=sc.PROFILE_LABELS[profile],
             rank_at_sep=str(rank_at_sep),
             timing_label=timing_label,
@@ -408,6 +405,7 @@ elif st.button("Explain my scenario in plain language"):
             ctx=ctx,
         )
     st.markdown(text)
+    st.caption(source)
 
 # ----------------------------------------------------------
 # Assumptions

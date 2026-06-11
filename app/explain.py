@@ -1,15 +1,27 @@
-"""Claude-powered plain-language explanation of app results.
+"""Plain-language explanation of app results.
 
-Single Messages API call: the app passes the numbers it already
-computed; Claude narrates them under the project's framing rules
-(neutral BRS - H3 difference, constant 2026 dollars, no "better").
-Reads ANTHROPIC_API_KEY from the environment; the numeric app
-works fully without it.
+Two-tier chain, so the explain button always works:
+
+1. **Gemini 2.5 Flash** (free API tier) when GEMINI_API_KEY or
+   GOOGLE_API_KEY is set — live LLM narration of the numbers
+   the app computed.
+2. **Built-in summary** otherwise (no key, rate-limited, or any
+   API error): a deterministic narrative generated locally from
+   the same numbers. Zero dependencies, works offline forever.
+
+Both tiers follow the project's framing rules: the neutral
+"lifetime value difference (BRS - H3)", constant 2026 dollars,
+and no claim that either system is "better". The LLM is given
+every number it may cite and instructed never to invent figures.
 """
 
 import os
 
-MODEL = "claude-opus-4-8"
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_URL = (
+    "https://generativelanguage.googleapis.com/"
+    f"v1beta/models/{GEMINI_MODEL}:generateContent"
+)
 
 SYSTEM_PROMPT = """\
 You explain U.S. military retirement modeling results in plain
@@ -37,20 +49,20 @@ Rules:
 """
 
 
-def explainer_status():
-    """None if the explainer is ready, else a user-facing note."""
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        return (
-            "Plain-language explanations need an Anthropic API "
-            "key. Set the ANTHROPIC_API_KEY environment variable "
-            "and restart — everything else in this app works "
-            "without it."
-        )
-    return None
+def _gemini_key():
+    return os.environ.get("GEMINI_API_KEY") or os.environ.get(
+        "GOOGLE_API_KEY"
+    )
 
 
 def _fmt(x):
     return f"-${abs(x):,.0f}" if x < 0 else f"${x:,.0f}"
+
+
+def _fmt_k(x):
+    """Round to the nearest thousand for narrative prose."""
+    sign = "-" if x < 0 else ""
+    return f"{sign}${abs(round(x, -3)):,.0f}"
 
 
 def _facts(
@@ -105,41 +117,149 @@ BRS spending
 """
 
 
+def _explain_gemini(facts):
+    """Live Gemini call. Returns text, or raises on any error."""
+    import requests
+
+    body = {
+        "system_instruction": {
+            "parts": [{"text": SYSTEM_PROMPT}]
+        },
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": (
+                            "Explain these retirement-system "
+                            "modeling results:\n\n" + facts
+                        )
+                    }
+                ],
+            }
+        ],
+    }
+    resp = requests.post(
+        GEMINI_URL,
+        json=body,
+        headers={"x-goog-api-key": _gemini_key()},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    parts = resp.json()["candidates"][0]["content"]["parts"]
+    text = "".join(p.get("text", "") for p in parts).strip()
+    if not text:
+        raise ValueError("empty Gemini response")
+    return text
+
+
+def _explain_builtin(
+    profile_label, rank_at_sep, timing_label, sep_yos, sep_age,
+    member_pct, mc, det, ctx,
+):
+    """Deterministic narrative built locally from the numbers."""
+    adv = mc["brs_adv"]
+    cm = mc["component_means"]
+    med = adv["p50"]
+    direction = (
+        "in favor of BRS"
+        if med >= 0
+        else "in favor of the legacy High-Three"
+    )
+
+    if sep_yos < 20:
+        p1 = (
+            f"Separating at {sep_yos} years as {rank_at_sep} "
+            f"({timing_label}), this {profile_label.lower()} "
+            "career ends before the 20-year pension cliff, so "
+            "neither system pays a pension. Under High-Three "
+            "the member leaves with only their own TSP savings "
+            f"(about {_fmt_k(cm['member_tsp'])}); under BRS the "
+            "government's automatic 1% and matching "
+            "contributions add about "
+            f"{_fmt_k(cm['govt_tsp'])} more. The median "
+            "lifetime value difference (BRS − H3) is "
+            f"{_fmt_k(med)} — {direction}."
+        )
+    else:
+        p1 = (
+            f"Separating at {sep_yos} years as {rank_at_sep} "
+            f"({timing_label}), this {profile_label.lower()} "
+            "career clears the 20-year cliff and earns a "
+            "lifetime pension under both systems. High-Three "
+            "pays 2.5% of the high-three pay base per year of "
+            "service versus 2.0% under BRS (pension NPV "
+            f"{_fmt_k(cm['h3_pension'])} vs "
+            f"{_fmt_k(cm['brs_pension'])}), while BRS adds "
+            f"about {_fmt_k(cm['govt_tsp'])} in government TSP "
+            "contributions. Netting the two, the median "
+            "lifetime value difference (BRS − H3) is "
+            f"{_fmt_k(med)} — {direction}."
+        )
+
+    sav = det["DoD_Savings"]
+    if sav >= 0:
+        sav_txt = (
+            f"so BRS saves the government {_fmt_k(sav)} on "
+            "this career"
+        )
+    else:
+        sav_txt = (
+            f"so BRS costs the government {_fmt_k(-sav)} more "
+            "for this career"
+        )
+    p2 = (
+        "On the government's side, this career costs "
+        f"{_fmt_k(det['H3_GovtCost'])} under High-Three and "
+        f"{_fmt_k(det['BRS_GovtCost'])} under BRS — {sav_txt}. "
+        f"Across the force, {ctx['share_pre20_members']:.0%} of "
+        f"{profile_label.lower()} entrants separate before 20 "
+        "years and receive only "
+        f"{ctx['share_pre20_spend']:.1%} of expected BRS "
+        f"spending; about {ctx['share_reaching_sep']:.0%} of "
+        f"entrants serve {sep_yos} or more years, and the "
+        "expected per-entrant saving from BRS is "
+        f"{_fmt_k(ctx['expected_savings'])}."
+    )
+
+    p3 = (
+        "These figures are medians across 20,000 simulated "
+        "futures; the middle 80% of outcomes for the difference "
+        f"runs from {_fmt_k(adv['p10'])} to "
+        f"{_fmt_k(adv['p90'])}, in constant 2026 dollars at "
+        "separation."
+    )
+
+    return f"{p1}\n\n{p2}\n\n{p3}"
+
+
 def explain_scenario(
     profile_label, rank_at_sep, timing_label, sep_yos, sep_age,
     member_pct, mc, det, ctx,
 ):
-    """Return a plain-language narrative of one scenario."""
-    import anthropic
+    """
+    Return (narrative_text, source_caption) for one scenario.
 
-    facts = _facts(
+    Tries Gemini when a key is present; otherwise (or on any
+    API failure) falls back to the built-in summary, so this
+    always returns usable text.
+    """
+    args = (
         profile_label, rank_at_sep, timing_label, sep_yos,
         sep_age, member_pct, mc, det, ctx,
     )
-    try:
-        client = anthropic.Anthropic()
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=16000,
-            system=SYSTEM_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Explain these retirement-system "
-                        "modeling results:\n\n" + facts
-                    ),
-                }
-            ],
-        )
-        return "".join(
-            block.text
-            for block in response.content
-            if block.type == "text"
-        )
-    except anthropic.APIError as err:
-        return (
-            f"Explanation unavailable "
-            f"({type(err).__name__}: {err.message}). "
-            "The numeric results above are unaffected."
-        )
+    if _gemini_key():
+        try:
+            text = _explain_gemini(_facts(*args))
+            return text, f"Narrated live by Gemini ({GEMINI_MODEL})."
+        except Exception as err:  # noqa: BLE001 — always fall back
+            note = (
+                f"Live narration unavailable "
+                f"({type(err).__name__}) — showing the "
+                "built-in summary."
+            )
+            return _explain_builtin(*args), note
+    return _explain_builtin(*args), (
+        "Built-in summary (set GEMINI_API_KEY for live AI "
+        "narration)."
+    )

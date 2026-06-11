@@ -98,11 +98,13 @@ streamlit run app/streamlit_app.py
   notebooks use; on the default timelines the app reproduces the
   committed `deterministic_results.csv` / `fiscal_results.csv`
   values exactly.
-- An optional **"Explain my numbers"** button sends the computed
-  results to the Claude API (model `claude-opus-4-8`) for a
-  plain-language narrative under the project's neutral framing
-  rules. It requires the `ANTHROPIC_API_KEY` environment variable;
-  everything else works offline.
+- An **"Explain my numbers"** button produces a plain-language
+  narrative of the computed results under the project's neutral
+  framing rules. With a `GEMINI_API_KEY` environment variable set
+  (Google's free API tier), the narration is generated live by
+  Gemini 2.5 Flash; without one — or on any API failure — the app
+  falls back to a built-in summary generated locally from the same
+  numbers, so the feature works offline and costs nothing.
 
 ## Key modeling choices
 
