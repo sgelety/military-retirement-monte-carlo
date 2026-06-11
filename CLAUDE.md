@@ -278,6 +278,12 @@ pension-cliff curve with the user's point marked. Run from repo root:
   markdown: every dollar amount rendered via `st.markdown` /
   `st.caption` must pass through the app's `esc_md` helper
   (`st.metric` and dataframes are plain text — no escaping there).
+- A plain-language "How this works" expander sits under the title
+  (lay explanation of the two systems, the 20K-future simulation,
+  the 2026-$ NPV convention, the equal-contribution design, and
+  exclusions); the technical "Model assumptions & limitations"
+  expander at the bottom remains the fine print. Keep both in sync
+  with any model change.
 - A rank-timeline strip (horizontal bar of grade tenures, E grades
   navajowhite / O grades lightsteelblue) sits under the snapshot
   metrics; a native multi-handle slider for promotion input was
