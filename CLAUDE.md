@@ -83,6 +83,7 @@ Raw data files are in `data/raw/`. Processed outputs go to `data/processed/`.
 - Columns: `YOS`, `Officer`, `Enlisted`, `PriorEnlistedOfficer`
 - YOS 1–40; officer column based on RAND DOPMA data; enlisted reflects typical progression
 - Officer/PEO columns deliberately top out at O-8 for late-career YOS: basic pay is capped at those YOS (the pay table flat-lines at ~$19,000/mo from YOS 34), so promoting to O-9/O-10 would not change modeled pay
+- PEO column uses **O-1E/O-2E/O-3E** for YOS 9–17: officers with more than 4 years of prior enlisted service draw the higher "E" pay tables (the modeled PEO commissions after 8 enlisted years, so they qualify; an officer commissioning before 4 years would use standard O-1/O-2/O-3). No E variant exists at O-4+, so YOS 18+ is unchanged. Fixed 2026-06-11; effect is +8.6–10.7% pay in YOS 9–11, +0–3.7% in the O-3E years, shifting PEO BRSAdv +$1.6–6.2K (TSP-side only — PEO 20+ pensions unchanged since the High-3 comes from O-4+ years)
 - Entry ages are model constants defined in code, not in this file: enlisted = 18, officer = 22, prior-enlisted officer = 18 (enlists) / 26 (commissions after 8 enlisted years)
 - Use this to look up the correct pay grade from `BasicPay_2026.csv` at each YOS
 
