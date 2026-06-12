@@ -418,7 +418,7 @@ with left:
         fmt_usd(adv["p50"]),
     )
     st.caption(esc_md(
-        f"Monte Carlo P10–P90: {fmt_usd(adv['p10'])} "
+        f"Monte Carlo P10–P90 (80% of outcomes): {fmt_usd(adv['p10'])} "
         f"to {fmt_usd(adv['p90'])} · mean "
         f"{fmt_usd(adv['mean'])} · N={n_iter:,}"
     ))
@@ -525,7 +525,7 @@ with ch1:
     ax.set_ylabel("Lifetime Value (2026 $ thousands)")
     ax.set_title(
         "Lifetime Value by System\n"
-        "(median; shaded: P10–P90)"
+        "(median; shaded: P10–P90, 80% of outcomes)"
     )
     ax.yaxis.set_major_formatter(
         plt.FuncFormatter(lambda x, _: f"${x:,.0f}K")
@@ -543,17 +543,19 @@ with ch2:
         x,
         mcc["brs_adv_p10"] / 1000,
         mcc["brs_adv_p90"] / 1000,
-        alpha=0.18, color=pcolor, label="P10–P90",
+        alpha=0.18, color=pcolor,
+        label="P10–P90 (80% of outcomes)",
     )
     ax.fill_between(
         x,
         mcc["brs_adv_p25"] / 1000,
         mcc["brs_adv_p75"] / 1000,
-        alpha=0.38, color=pcolor, label="P25–P75",
+        alpha=0.38, color=pcolor,
+        label="P25–P75 (50% of outcomes)",
     )
     ax.plot(
         x, mcc["brs_adv_p50"] / 1000,
-        color=pcolor, lw=2, label="Median",
+        color=pcolor, lw=2, label="Median (P50)",
     )
     ax.plot(
         curve["SepYOS"], curve["BRSAdv"] / 1000,
@@ -580,7 +582,7 @@ with ch2:
     ax.yaxis.set_major_formatter(
         plt.FuncFormatter(lambda x, _: f"${x:,.0f}K")
     )
-    ax.legend(fontsize=8)
+    ax.legend(fontsize=8, loc="lower left")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     st.pyplot(fig)
