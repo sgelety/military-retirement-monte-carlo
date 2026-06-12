@@ -115,7 +115,7 @@ streamlit run app/streamlit_app.py
   model); all results are reported in **constant 2026 dollars**.
 - TSP returns follow an age-based L Fund glide path parameterized
   from TSP historical data (extended to 2002 via regression-based
-  synthetic backfill, R² > 0.99).
+  synthetic backfill, R² 0.989–0.998).
 - The COLA draw is held constant within each simulated future, so it
   represents lifetime-average inflation; it is fit on rolling 30-year
   average CPI (mean ≈ 3.4%, std ≈ 1.3%). The DoD Board of

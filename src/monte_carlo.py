@@ -21,8 +21,11 @@ from tsp_calcs import (
     select_fund,
 )
 
-# Approximate std dev of age at death for males conditioned on
-# reaching middle age; consistent with SSA 2022 mortality tables.
+# Std dev of age at death conditional on reaching the modeled
+# separation ages. Verified against the SSA 2022 male table by
+# recovering the survival curve from MaleLifeExpectancy
+# (S'/S = -(1 + e')/e): std is 13.5 yr at age 38, 12.9 at 42,
+# 12.6 at 44. 13.0 sits in that range.
 DEATH_AGE_STD = 13.0
 
 
