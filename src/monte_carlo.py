@@ -250,6 +250,10 @@ def run_scenario(
         "brs_total", "h3_total", "brs_adv",
         "h3_pension_npv", "brs_pension_npv",
         "h3_tsp_pv", "brs_tsp_pv"
+        Plus the input draws behind each iteration:
+        "cola" (lifetime COLA), "tsp_ret_mean" (average
+        annual TSP return drawn, service + growth to 60),
+        "death_age" (NaN for sep_yos < 20 — not drawn).
     """
     rng = np.random.default_rng(seed)
     entry_age = entry_ages[profile]
@@ -273,6 +277,7 @@ def run_scenario(
     # TSP accumulation — same return draws for BRS and H3
     bal_brs = np.zeros(n_iter)
     bal_h3 = np.zeros(n_iter)
+    ret_sum = np.zeros(n_iter)
     for i, yos in enumerate(pay.index):
         age = entry_age + yos - 1
         fund = select_fund(max(0, 60 - age))
@@ -281,6 +286,7 @@ def run_scenario(
             fund_stats[fund]["std"],
             n_iter,
         )
+        ret_sum += r
         annual_pay = pay_nom[i] * 12.0
         bal_brs = (
             bal_brs
@@ -300,8 +306,10 @@ def run_scenario(
         )
         bal_brs = bal_brs * (1.0 + r)
         bal_h3 = bal_h3 * (1.0 + r)
+        ret_sum += r
 
     gap = max(0, 60 - sep_age)
+    tsp_ret_mean = ret_sum / (len(pay.index) + gap)
     disc = (1.0 + discount_rate) ** gap
     tsp_pv_brs = bal_brs / disc / deflator
     tsp_pv_h3 = bal_h3 / disc / deflator
@@ -334,6 +342,7 @@ def run_scenario(
     else:
         h3_npv = np.zeros(n_iter)
         brs_npv = np.zeros(n_iter)
+        death_age = np.full(n_iter, np.nan)
 
     h3_total = h3_npv + tsp_pv_h3
     brs_total = brs_npv + tsp_pv_brs
@@ -345,4 +354,7 @@ def run_scenario(
         "brs_pension_npv": brs_npv,
         "h3_tsp_pv": tsp_pv_h3,
         "brs_tsp_pv": tsp_pv_brs,
+        "cola": cola,
+        "tsp_ret_mean": tsp_ret_mean,
+        "death_age": death_age,
     }

@@ -314,7 +314,7 @@ Keep these as importable .py modules, not inline in notebooks:
 - `pay_builder.py` — `lookup_pay`, `build_pay_series` (extracted from nb02 unchanged; nb02 imports them), plus app-facing timeline helpers `promotion_points`, `grades_from_points`, `pay_series_from_grades` ✓
 - `tsp_calcs.py` — `tsp_at_separation(pay, entry_age, means, rate)` where `rate` is a float or callable(yos), `tsp_grow_to_60`, `compute_fund_means`, `select_fund`, `brs_govt_rate`, `brs_total_rate`; exports `BRS_CONTRIB_RATE=0.10` and `H3_MEMBER_RATE=0.05` (steady-state) ✓
 - `utils.py` — `npv_pension`, `pv_lump_sum`, `percentile_summary` ✓
-- `monte_carlo.py` — `fit_fund_stats`, `fit_cola_stats`, `npv_pension_vec`, `grown_pay_matrix`, `high3_base_vec`, `govt_tsp_pv_vec`, `run_scenario(..., member_rate=0.05)` (outputs constant 2026 $); exports `DEATH_AGE_STD=13.0` ✓
+- `monte_carlo.py` — `fit_fund_stats`, `fit_cola_stats`, `npv_pension_vec`, `grown_pay_matrix`, `high3_base_vec`, `govt_tsp_pv_vec`, `run_scenario(..., member_rate=0.05)` (outputs constant 2026 $; also returns the per-iteration input draws `cola`, `tsp_ret_mean`, `death_age` — no extra RNG calls, used by nb03b's tail-attribution section); exports `DEATH_AGE_STD=13.0` ✓
 
 ---
 
