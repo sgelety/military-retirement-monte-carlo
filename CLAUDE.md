@@ -179,10 +179,11 @@ behavioral prediction. State the assumed shift explicitly in every output and
 never claim BRS causes it.
 
 Scope guardrails:
-- **Per-entrant metrics ONLY** — expected H3_GovtCost, BRS_GovtCost, and
-  DoD_Savings per entrant. Do NOT involve force size, accessions, or
-  force-level totals. They are irrelevant to the per-entrant comparison and
-  out of scope for this cut.
+- **Per-entrant metrics** for the main shift and break-even cuts — expected
+  H3_GovtCost, BRS_GovtCost, and DoD_Savings per entrant. The closing
+  force-wide cell (see break-even bullet below) is the one deliberate
+  exception: it scales per-entrant DoD_Savings by accessions to show the
+  enlisted/officer offset. Keep force size out of every earlier cut.
 - Operates entirely on the modeled-scenario separation weights from nb04
   (`scenario_weights` — a per-profile pd.Series indexed by SepYOS, summing
   to 1). Per-scenario costs (`fiscal` / `deterministic_results.csv`) are
@@ -216,10 +217,10 @@ Mechanism:
 
 Default hypothesis scenario — `BAND_DELTAS` (magnitudes are assumptions, not
 data — adjustable):
-- First term (≤6): −4 pts — more retained past first term.
-- Early mid (7–12): +4 pts — more mid-career separation.
-- Late mid (13–19): +2 pts — more pre-20 separation.
-- Career (20+): −2 pts — slightly fewer reach 20.
+- First term (≤6): −8 pts — more retained past first term.
+- Early mid (7–12): +8 pts — more mid-career separation.
+- Late mid (13–19): +4 pts — more pre-20 separation.
+- Career (20+): −4 pts — fewer reach 20.
 - Must net to zero. The same band deltas apply to all three profiles; the
   proportional distribution adapts to each profile's own weights (Enlisted
   scenarios end at YOS 28).
@@ -231,6 +232,31 @@ Presentation:
   %, per profile. Expected cost is linear in the weights, so erosion is
   monotonic between the two endpoints by construction — no sweep plot needed
   (state the linearity in text rather than charting a straight line).
+- **Break-even + force-level follow-on** (2026-06-13): a cell pushes the same
+  band pattern to a deliberately extreme magnitude (`DRASTIC_DELTAS` = First
+  term −28 / Early mid +28 / Late mid +14 / Career −14 pts, i.e. 3.5× the
+  main shift — about the most this pattern can move before a profile's
+  first-term cohort empties). Per entrant this turns **Enlisted negative
+  (≈−\$8K)** while Officer/PEO stay positive (≈+\$40–51K) — the officer
+  advantage is anchored in the smaller 20-year pension. A closing force-wide
+  cell then scales per-entrant DoD_Savings by accessions
+  (`ACCESSIONS = {Enlisted: 140_000, Officer: 18_000}`; PEO folded into the
+  enlisted line) and shows the offset: because enlisted outnumber officers
+  ~8:1, the negative enlisted (−\$1.18B) overwhelms the positive officer
+  (+\$0.71B), flipping the force-wide result from +\$5.1B to ≈−\$0.5B. The
+  force view **recreates nb04's obligation-accrual chart** (H3-vs-BRS stacked
+  by Enlisted/Officer, with a per-pair savings arrow), drawn for the
+  baseline, moderate (section-3, −8/+8/+4/−4) and drastic retention regimes
+  side by side: each step lowers total obligations (H3 ≈\$48B→\$40B→\$19B —
+  far fewer reach 20 to draw a pension) and the H3−BRS gap shrinks then flips
+  (+\$5.1B → +\$3.5B → −\$0.5B). The reading quantifies how extreme the
+  drastic shift is: enlisted reaching 20 falls from ~19 to ~5 per 100
+  entrants (officers ~41→~27), a stress bound rather than a forecast. A standalone savings bar and a multiplier/feasibility
+  sweep were both tried and rejected (the obligation framing matches nb04 and
+  avoids negative bars; note the sign-flip is a small gap at the lower
+  drastic obligation level). The per-entrant view keeps the same
+  baseline-vs-shifted separation bar chart as the main shift. The magnitude
+  is an explicit assumption, not a behavioral forecast.
 
 ---
 
