@@ -71,6 +71,14 @@ PROFILE_MAX_YOS = {
     "Enlisted": 30,
     "PriorEnlistedOfficer": 40,
 }
+# Per-year survival column for the "% serve N+ years" stat. PEOs
+# are modeled on the officer separation schedule (their scenario
+# weights are identical to Officer).
+SURVIVAL_COL = {
+    "Officer": "OfficerSurvival",
+    "PriorEnlistedOfficer": "OfficerSurvival",
+    "Enlisted": "EnlistedSurvival",
+}
 MIN_SEP_YOS = 4
 
 # Deterministic baseline assumptions (match notebook 03a)
@@ -98,12 +106,16 @@ def load_inputs():
     weights = pd.read_csv(
         PROCESSED / "scenario_weights.csv"
     )
+    withdrawal = pd.read_csv(
+        PROCESSED / "withdrawal_rates.csv"
+    ).set_index("YOS")
     return {
         "basic_pay": basic_pay,
         "promotion": promotion,
         "life_exp": life_exp,
         "fiscal": fiscal,
         "weights": weights,
+        "withdrawal": withdrawal,
         "fund_means": compute_fund_means(tsp_returns),
         "fund_stats": fit_fund_stats(tsp_returns),
         "cola_stats": fit_cola_stats(
@@ -366,10 +378,15 @@ def population_context(inputs, profile, sep_yos):
     """
     Force-wide context stats for the selected profile.
 
-    Computed from notebook 04's persisted outputs
-    (fiscal_results.csv, scenario_weights.csv) on the
-    standard career profiles — these describe the force,
-    not the user's custom timeline.
+    The cost-weighted stats (expected costs, spending shares)
+    come from notebook 04's persisted outputs
+    (fiscal_results.csv, scenario_weights.csv), which are binned
+    to the even modeled-scenario grid that the per-scenario
+    costs live on. The "% serve N+ years" stat instead uses the
+    exact per-year DoD survival curve (withdrawal_rates.csv), so
+    it is correct at every integer slider value rather than
+    dropping a whole bin between grid points. All describe the
+    standard career profiles — not the user's custom timeline.
     """
     fiscal = inputs["fiscal"]
     weights = inputs["weights"]
@@ -393,7 +410,12 @@ def population_context(inputs, profile, sep_yos):
     share_pre20_spend = float(
         brs_spend[pre20].sum() / brs_spend.sum()
     )
-    reach_sep = float(w[w.index >= sep_yos].sum())
+    # Share serving sep_yos+ years = probability of still being
+    # in service at the start of year sep_yos = survival after
+    # year (sep_yos - 1). Exact at every integer YOS, unlike the
+    # binned weights tail, which steps a whole bin at a time.
+    surv = inputs["withdrawal"][SURVIVAL_COL[profile]]
+    reach_sep = float(surv.loc[sep_yos - 1])
 
     return {
         "expected_h3_cost": exp_h3,

@@ -298,9 +298,13 @@ repo root: `streamlit run app/streamlit_app.py`.
   and grade/YOS combos the pay table doesn't support. Rank is
   asserted by the user, never predicted. The pay table is filled
   through YOS 40 for every grade, so held junior grades price fine.
-- Force-wide context stats (spending split, share reaching the
-  user's YOS, expected per-entrant savings) come from nb04's
-  persisted `fiscal_results.csv` + `scenario_weights.csv` and always
+- Force-wide context stats (spending split, expected per-entrant
+  savings) come from nb04's persisted `fiscal_results.csv` +
+  `scenario_weights.csv`; the "share reaching the user's YOS" stat
+  instead reads the exact per-year DoD survival curve
+  (`withdrawal_rates.csv`, PEO mapped to the officer schedule) so it
+  is correct at every integer slider value rather than stepping a
+  whole bin between the even modeled-scenario grid points. All always
   describe the *standard* profiles — a custom timeline changes the
   user's ledgers only.
 - **Explanation layer** (`app/explain.py`), two tiers so the button

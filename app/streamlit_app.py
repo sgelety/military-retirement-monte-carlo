@@ -45,6 +45,19 @@ def fmt_usd(x):
     return f"{sign}${abs(x):,.0f}"
 
 
+def theme_fg():
+    """Foreground color for matplotlib text matching the app theme.
+
+    Streamlit's default text is #fafafa on dark, #262730 on light.
+    Falls back to the light value if the theme can't be read.
+    """
+    try:
+        is_dark = st.context.theme.type == "dark"
+    except Exception:  # noqa: BLE001 — theme may be unavailable
+        is_dark = False
+    return "#fafafa" if is_dark else "#262730"
+
+
 def esc_md(text):
     """Escape $ so paired dollars don't render as LaTeX math.
 
@@ -53,6 +66,133 @@ def esc_md(text):
     dollar amounts before rendering.
     """
     return text.replace("$", "\\$")
+
+
+# ----------------------------------------------------------
+# Static copy — long, unchanging blurbs for the two expanders.
+# Kept here (rather than mid-layout) so the render flow below
+# reads as structure. Pass through esc_md() at render time.
+# ----------------------------------------------------------
+HOW_IT_WORKS = (
+    "**What's being compared.** Two retirement systems. "
+    "The legacy **High-Three** pays a pension of 2.5% × "
+    "years served × your highest 36 months of basic pay — "
+    "but only if you reach 20 years. Leave at 19 and you "
+    "get nothing. The **BRS** (everyone joining since 2018) "
+    "pays a smaller pension (2.0% per year, same 20-year "
+    "rule) but adds money to your TSP that you keep no "
+    "matter when you leave: 1% of basic pay automatically, "
+    "plus matching on your own contributions (full match at "
+    "5%). This app asks: over a whole lifetime, which "
+    "package is worth more for *your* career — and what "
+    "does each cost the government?\n\n"
+    "**Step 1 — your pay history.** From your profile and "
+    "promotion timeline, the app builds your year-by-year "
+    "basic pay using the official 2026 military pay table "
+    "(including the higher O-1E/O-2E/O-3E rates for "
+    "prior-enlisted officers). Rank comes from typical "
+    "promotion timing — or your own edits in the sidebar.\n\n"
+    "**Step 2 — 20,000 possible futures.** Nobody knows "
+    "future market returns, inflation, or how long they'll "
+    "live, so instead of pretending to, the app simulates "
+    "20,000 versions of your future and varies all three:\n"
+    "- **TSP returns** are drawn from the actual history of "
+    "the TSP Lifecycle (L) funds, and your money follows "
+    "the same glide path a real L fund does — aggressive "
+    "stock-heavy funds when you're young, shifting toward "
+    "safer funds as you near 60.\n"
+    "- **Inflation** for each future is drawn from over a "
+    "century of U.S. inflation data, and drives pay raises, "
+    "pension cost-of-living adjustments, and the conversion "
+    "to today's dollars — consistently, all at once.\n"
+    "- **Lifespan** is drawn from the Social Security "
+    "Administration's actuarial tables, given your age at "
+    "separation — because a pension's value depends "
+    "enormously on how many years it actually pays.\n\n"
+    "The chart dots and the P10–P90 band show the spread "
+    "across those 20,000 futures: the median is the middle "
+    "outcome, and 80% of simulated futures land inside the "
+    "band.\n\n"
+    "**Why everything is in \"2026 dollars at separation\".** "
+    "A dollar promised in 2055 is worth less than a dollar "
+    "today — both because of inflation and because money in "
+    "hand earns returns. Every future payment (pension "
+    "checks, TSP balance at 60) is discounted back to your "
+    "separation date at 5% per year and stated in 2026 "
+    "purchasing power, so a pension stream and a TSP "
+    "balance can be compared apples-to-apples.\n\n"
+    "**Why your contribution is the same under both "
+    "systems.** The slider sets *your* TSP contribution "
+    "identically under H3 and BRS. That's deliberate: your "
+    "own savings would follow you either way, so holding it "
+    "equal isolates what the *government* provides "
+    "differently — the match and the pension multiplier. "
+    "That's also why the headline difference doesn't move "
+    "above 5%: the match is maxed, and beyond that it's "
+    "your money under both systems.\n\n"
+    "**The market-outlook setting** answers a different "
+    "question than the shaded bands. The bands show *luck* "
+    "— good and bad return sequences around the historical "
+    "average. The outlook setting shifts the *average "
+    "itself* by 2 percentage points, sustained for your "
+    "whole career — a decades-long bull or bear regime. "
+    "It's a strong assumption, and it's the strongest "
+    "single lever on the answer for 20+ year careers.\n\n"
+    "**The government side** values the same career the way "
+    "an actuary would: the pension promise discounted at "
+    "5%, plus the government's TSP deposits compounded at "
+    "that same rate. Force-wide statistics weight each "
+    "possible separation point by the DoD actuary's "
+    "historical separation rates.\n\n"
+    "**What's deliberately left out:** taxes, the BRS "
+    "continuation-pay bonus (a mid-career cash incentive — "
+    "excluding it slightly favors High-Three), reserve/"
+    "guard retirement, and personal withdrawal strategy. "
+    "Promotion timing is asserted by you, not predicted.\n\n"
+    "*Data sources: DFAS 2026 pay table, DoD Office of the "
+    "Actuary separation rates, TSP.gov fund history, SSA "
+    "2022 life tables, BLS CPI (1913–present).*"
+)
+
+ASSUMPTIONS = (
+    "- **Reporting**: NPV at separation, constant 2026 "
+    "dollars; framing is the neutral difference "
+    "(BRS − H3), not a recommendation.\n"
+    "- **Deterministic path**: 2.75% COLA / pay growth "
+    "(DoD actuarial), glide-path L Fund historical "
+    "means, SSA 2022 male life expectancy.\n"
+    "- **Monte Carlo**: stochastic TSP returns "
+    "(glide-path L Fund distributions), lifetime-"
+    "average COLA (rolling 30-yr CPI fit), and age at "
+    "death (SSA 2022 male, ±13 yr).\n"
+    "- **TSP**: member contributes the same rate under "
+    "both systems; BRS adds 1% automatic plus up to 4% "
+    "match (from YOS 3). Returns follow the L Fund "
+    "glide path to age 60, then drawdown pricing at "
+    "the discount rate.\n"
+    "- **Market outlook**: a uniform ±2 pp shift of all "
+    "glide-path mean returns — the return component of "
+    "notebook 05's Bull/Bear regime stress (the notebook "
+    "scenarios additionally vary COLA and discount rate; "
+    "here the discount rate is its own Advanced control). "
+    "A separate construct from the Monte Carlo's "
+    "year-to-year variation.\n"
+    "- **Promotion timeline**: rank is asserted by you "
+    "(or the typical table), not predicted; pay is "
+    "priced from the 2026 DFAS table.\n"
+    "- **Entry age** (default 18 enlisted / 22 officer / "
+    "18 prior-enlisted) shifts every age-keyed input: "
+    "the TSP glide path, the growth window to 60, and "
+    "the life-expectancy lookup. Separations past age "
+    "60 are handled (no growth window).\n"
+    "- **Out of scope**: reserve retirement, "
+    "continuation pay, TSP withdrawal strategy, and "
+    "behavioral retention effects.\n"
+    "- Force-wide context uses DoD actuarial "
+    "separation rates on the standard profiles; your "
+    "custom timeline changes your ledger, not the "
+    "force-wide stats."
+)
 
 
 @st.cache_resource
@@ -269,86 +409,7 @@ st.caption(
 )
 
 with st.expander("How this works — where these numbers come from"):
-    st.markdown(esc_md(
-        "**What's being compared.** Two retirement systems. "
-        "The legacy **High-Three** pays a pension of 2.5% × "
-        "years served × your highest 36 months of basic pay — "
-        "but only if you reach 20 years. Leave at 19 and you "
-        "get nothing. The **BRS** (everyone joining since 2018) "
-        "pays a smaller pension (2.0% per year, same 20-year "
-        "rule) but adds money to your TSP that you keep no "
-        "matter when you leave: 1% of basic pay automatically, "
-        "plus matching on your own contributions (full match at "
-        "5%). This app asks: over a whole lifetime, which "
-        "package is worth more for *your* career — and what "
-        "does each cost the government?\n\n"
-        "**Step 1 — your pay history.** From your profile and "
-        "promotion timeline, the app builds your year-by-year "
-        "basic pay using the official 2026 military pay table "
-        "(including the higher O-1E/O-2E/O-3E rates for "
-        "prior-enlisted officers). Rank comes from typical "
-        "promotion timing — or your own edits in the sidebar.\n\n"
-        "**Step 2 — 20,000 possible futures.** Nobody knows "
-        "future market returns, inflation, or how long they'll "
-        "live, so instead of pretending to, the app simulates "
-        "20,000 versions of your future and varies all three:\n"
-        "- **TSP returns** are drawn from the actual history of "
-        "the TSP Lifecycle (L) funds, and your money follows "
-        "the same glide path a real L fund does — aggressive "
-        "stock-heavy funds when you're young, shifting toward "
-        "safer funds as you near 60.\n"
-        "- **Inflation** for each future is drawn from over a "
-        "century of U.S. inflation data, and drives pay raises, "
-        "pension cost-of-living adjustments, and the conversion "
-        "to today's dollars — consistently, all at once.\n"
-        "- **Lifespan** is drawn from the Social Security "
-        "Administration's actuarial tables, given your age at "
-        "separation — because a pension's value depends "
-        "enormously on how many years it actually pays.\n\n"
-        "The chart dots and the P10–P90 band show the spread "
-        "across those 20,000 futures: the median is the middle "
-        "outcome, and 80% of simulated futures land inside the "
-        "band.\n\n"
-        "**Why everything is in \"2026 dollars at separation\".** "
-        "A dollar promised in 2055 is worth less than a dollar "
-        "today — both because of inflation and because money in "
-        "hand earns returns. Every future payment (pension "
-        "checks, TSP balance at 60) is discounted back to your "
-        "separation date at 5% per year and stated in 2026 "
-        "purchasing power, so a pension stream and a TSP "
-        "balance can be compared apples-to-apples.\n\n"
-        "**Why your contribution is the same under both "
-        "systems.** The slider sets *your* TSP contribution "
-        "identically under H3 and BRS. That's deliberate: your "
-        "own savings would follow you either way, so holding it "
-        "equal isolates what the *government* provides "
-        "differently — the match and the pension multiplier. "
-        "That's also why the headline difference doesn't move "
-        "above 5%: the match is maxed, and beyond that it's "
-        "your money under both systems.\n\n"
-        "**The market-outlook setting** answers a different "
-        "question than the shaded bands. The bands show *luck* "
-        "— good and bad return sequences around the historical "
-        "average. The outlook setting shifts the *average "
-        "itself* by 2 percentage points, sustained for your "
-        "whole career — a decades-long bull or bear regime. "
-        "It's a strong assumption, and it's the strongest "
-        "single lever on the answer for 20+ year careers.\n\n"
-        "**The government side** values the same career the way "
-        "an actuary would: the pension promise discounted at "
-        "5%, plus the government's TSP deposits compounded at "
-        "that same rate. Force-wide statistics weight each "
-        "possible separation point by the DoD actuary's "
-        "historical separation rates.\n\n"
-        "**What's deliberately left out:** taxes, the BRS "
-        "continuation-pay bonus (a mid-career cash incentive — "
-        "excluding it slightly favors High-Three), reserve/"
-        "guard retirement, and personal withdrawal strategy. "
-        "Promotion timing is asserted by you, not predicted.\n\n"
-        "*Data sources: DFAS 2026 pay table, DoD Office of the "
-        "Actuary separation rates, TSP.gov fund history, SSA "
-        "2022 life tables, BLS CPI (1913–present).*"
-    ))
+    st.markdown(esc_md(HOW_IT_WORKS))
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Profile", sc.PROFILE_LABELS[profile])
@@ -371,7 +432,10 @@ for yos, grade in grades.loc[:sep_yos].items():
     else:
         runs.append([grade, yos, yos])
 
+fg = theme_fg()
 fig, ax = plt.subplots(figsize=(10, 0.9))
+fig.patch.set_alpha(0.0)  # blend with the app's page background
+ax.patch.set_alpha(0.0)
 for grade, start, end in runs:
     color = (
         "navajowhite"
@@ -382,19 +446,38 @@ for grade, start, end in runs:
         0, end - start + 1, left=start, height=0.8,
         color=color, edgecolor="white",
     )
+    # Grade label sits on the light-colored bar, so keep it dark.
     ax.text(
         (start + end + 1) / 2, 0, str(grade),
-        ha="center", va="center", fontsize=9,
+        ha="center", va="center", fontsize=9, color="#262730",
     )
 ax.set_xlim(1, sep_yos + 1)
 ax.set_yticks([])
-ax.set_xlabel("Years of Service", fontsize=9)
+ax.set_xlabel("Years of Service", fontsize=9, color=fg)
+ax.tick_params(colors=fg)
+ax.spines["bottom"].set_color(fg)
 for side in ("top", "right", "left"):
     ax.spines[side].set_visible(False)
 fig.tight_layout()
 st.pyplot(fig)
 plt.close(fig)
 st.caption(f"Rank timeline ({timing_label})")
+
+# One-line takeaway — colored headline number (blue is neutral;
+# red would read as a warning).
+adv_med = mc["brs_adv"]["p50"]
+if adv_med >= 0:
+    headline = (
+        f"For this career, **BRS yields about {fmt_usd(adv_med)} "
+        "more** over a lifetime than High-Three (median)."
+    )
+else:
+    headline = (
+        "For this career, **legacy High-Three yields about "
+        f"{fmt_usd(-adv_med)} more** over a lifetime than BRS "
+        "(median)."
+    )
+st.markdown(f"#### :blue[{esc_md(headline)}]")
 
 if sep_yos < 20:
     st.info(
@@ -612,42 +695,4 @@ if st.button("Explain my scenario in plain language"):
 # Assumptions
 # ----------------------------------------------------------
 with st.expander("Model assumptions & limitations"):
-    st.markdown(
-        "- **Reporting**: NPV at separation, constant 2026 "
-        "dollars; framing is the neutral difference "
-        "(BRS − H3), not a recommendation.\n"
-        "- **Deterministic path**: 2.75% COLA / pay growth "
-        "(DoD actuarial), glide-path L Fund historical "
-        "means, SSA 2022 male life expectancy.\n"
-        "- **Monte Carlo**: stochastic TSP returns "
-        "(glide-path L Fund distributions), lifetime-"
-        "average COLA (rolling 30-yr CPI fit), and age at "
-        "death (SSA 2022 male, ±13 yr).\n"
-        "- **TSP**: member contributes the same rate under "
-        "both systems; BRS adds 1% automatic plus up to 4% "
-        "match (from YOS 3). Returns follow the L Fund "
-        "glide path to age 60, then drawdown pricing at "
-        "the discount rate.\n"
-        "- **Market outlook**: a uniform ±2 pp shift of all "
-        "glide-path mean returns — the return component of "
-        "notebook 05's Bull/Bear regime stress (the notebook "
-        "scenarios additionally vary COLA and discount rate; "
-        "here the discount rate is its own Advanced control). "
-        "A separate construct from the Monte Carlo's "
-        "year-to-year variation.\n"
-        "- **Promotion timeline**: rank is asserted by you "
-        "(or the typical table), not predicted; pay is "
-        "priced from the 2026 DFAS table.\n"
-        "- **Entry age** (default 18 enlisted / 22 officer / "
-        "18 prior-enlisted) shifts every age-keyed input: "
-        "the TSP glide path, the growth window to 60, and "
-        "the life-expectancy lookup. Separations past age "
-        "60 are handled (no growth window).\n"
-        "- **Out of scope**: reserve retirement, "
-        "continuation pay, TSP withdrawal strategy, and "
-        "behavioral retention effects.\n"
-        "- Force-wide context uses DoD actuarial "
-        "separation rates on the standard profiles; your "
-        "custom timeline changes your ledger, not the "
-        "force-wide stats."
-    )
+    st.markdown(ASSUMPTIONS)
