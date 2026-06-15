@@ -357,6 +357,41 @@ def mc_curve(
     return pd.DataFrame(rows)
 
 
+def mc_cusp(
+    profile, pay_full, entry_age, life_exp, fund_stats,
+    cola_stats, member_rate=0.05,
+    discount_rate=DISCOUNT_RATE, n_iter=20_000, seed=SEED,
+):
+    """TSP-only percentiles at the 20-YOS vesting cliff.
+
+    Each fan reaches this value on the cusp of vesting, where
+    both pensions are still zero. Uses the same per-YOS seed as
+    mc_curve's YOS-20 row, so the cusp band comes from the same
+    simulated futures (matches nb03b). Returns
+    {key: percentile_summary} for h3_total, brs_total, brs_adv.
+    """
+    pay_df = pd.DataFrame(
+        {
+            "Profile": profile,
+            "YOS": pay_full.index,
+            "MonthlyPay": pay_full.values,
+        }
+    )
+    res = run_scenario(
+        profile, 20, pay_df, life_exp, fund_stats,
+        cola_stats, {profile: entry_age}, n_iter=n_iter,
+        discount_rate=discount_rate, seed=seed + 20,
+        member_rate=member_rate,
+    )
+    return {
+        "h3_total": percentile_summary(res["h3_tsp_pv"]),
+        "brs_total": percentile_summary(res["brs_tsp_pv"]),
+        "brs_adv": percentile_summary(
+            res["brs_tsp_pv"] - res["h3_tsp_pv"]
+        ),
+    }
+
+
 def mc_from_curve_row(row):
     """One mc_curve row as the nested dict explain.py expects."""
     out = {

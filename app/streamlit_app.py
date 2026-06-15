@@ -23,10 +23,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scenario_calcs as sc  # noqa: E402
 from explain import explain_scenario  # noqa: E402
 
-# System colors — deliberately distinct from the project's
-# profile palette (darkorange / forestgreen / steelblue)
-H3_COLOR = "dimgray"
-BRS_COLOR = "crimson"
+# System colors — the notebooks' palette: BRS bright
+# blue, High-Three bright amber (deliberately not red).
+# The muted slate / brown versions shade the difference
+# chart's two halves.
+H3_COLOR = "#c1843d"
+BRS_COLOR = "#3a7ebf"
+BRS_REGION = "#3f5266"
+H3_REGION = "#8a6033"
 PROFILE_COLORS = {
     "Enlisted": "darkorange",
     "PriorEnlistedOfficer": "forestgreen",
@@ -235,6 +239,25 @@ def cached_mc_curve(
     )
 
 
+@st.cache_data
+def cached_mc_cusp(
+    profile, points, max_yos, entry_age, member_rate, disc,
+    n_iter, outlook,
+):
+    inputs = get_inputs()
+    pay, _ = sc.pay_from_points(
+        list(points), max_yos, inputs["basic_pay"]
+    )
+    stats = sc.shift_fund_stats(
+        inputs["fund_stats"], sc.REGIME_SHIFTS[outlook]
+    )
+    return sc.mc_cusp(
+        profile, pay, entry_age,
+        inputs["life_exp"], stats, inputs["cola_stats"],
+        member_rate, disc, n_iter=n_iter,
+    )
+
+
 inputs = get_inputs()
 
 # ----------------------------------------------------------
@@ -396,6 +419,22 @@ mc = sc.mc_from_curve_row(
 )
 det = curve.set_index("SepYOS").loc[sep_yos]
 ctx = sc.population_context(inputs, profile, sep_yos)
+
+# Cliff split: the pension vests at 20, so the fans jump
+# there. Recover the TSP-only "cusp" the pre-20 lines reach.
+career_max = int(mcc["SepYOS"].max())
+has_cliff = career_max >= 20
+cusp = (
+    cached_mc_cusp(
+        profile, points_key, max_yos, entry_age, member_rate,
+        disc, n_iter, outlook,
+    )
+    if has_cliff
+    else None
+)
+drow20 = (
+    curve.set_index("SepYOS").loc[20] if has_cliff else None
+)
 
 # ----------------------------------------------------------
 # Header + career snapshot
@@ -578,40 +617,79 @@ st.caption(
     "futures."
 )
 ch1, ch2 = st.columns(2)
-x = mcc["SepYOS"]
 
 with ch1:
     fig, ax = plt.subplots(figsize=(7, 4.2))
+    pre = mcc[mcc["SepYOS"] < 20]
+    post = mcc[mcc["SepYOS"] >= 20]
     for key, color, label in [
         ("h3_total", H3_COLOR, "High-Three"),
         ("brs_total", BRS_COLOR, "BRS"),
     ]:
-        ax.fill_between(
-            x,
-            mcc[f"{key}_p10"] / 1000,
-            mcc[f"{key}_p90"] / 1000,
-            alpha=0.15, color=color,
-        )
+        if has_cliff:
+            cu = cusp[key]
+            xp = list(pre["SepYOS"]) + [20]
+            # Bands, extended to the value on the cusp of
+            # vesting at 20 (TSP only, no pension yet).
+            ax.fill_between(
+                xp,
+                list(pre[f"{key}_p10"] / 1000)
+                + [cu["p10"] / 1000],
+                list(pre[f"{key}_p90"] / 1000)
+                + [cu["p90"] / 1000],
+                alpha=0.15, color=color,
+            )
+            ax.fill_between(
+                post["SepYOS"], post[f"{key}_p10"] / 1000,
+                post[f"{key}_p90"] / 1000,
+                alpha=0.15, color=color,
+            )
+            # Median: pre to the cusp (open marker = limit not
+            # attained), dotted drop = the cliff, then 20+.
+            ax.plot(
+                xp,
+                list(pre[f"{key}_p50"] / 1000)
+                + [cu["p50"] / 1000],
+                color=color, lw=2, label=label,
+            )
+            vested = post[f"{key}_p50"].iloc[0] / 1000
+            ax.plot(
+                [20], [cu["p50"] / 1000], "o", mfc="white",
+                mec=color, mew=1.4, zorder=6,
+            )
+            ax.plot(
+                [20, 20], [cu["p50"] / 1000, vested],
+                ls=":", color=color, lw=1.1, alpha=0.8,
+            )
+            ax.plot(
+                post["SepYOS"], post[f"{key}_p50"] / 1000,
+                color=color, lw=2,
+            )
+        else:
+            ax.fill_between(
+                mcc["SepYOS"], mcc[f"{key}_p10"] / 1000,
+                mcc[f"{key}_p90"] / 1000,
+                alpha=0.15, color=color,
+            )
+            ax.plot(
+                mcc["SepYOS"], mcc[f"{key}_p50"] / 1000,
+                color=color, lw=2, label=label,
+            )
         ax.plot(
-            x, mcc[f"{key}_p50"] / 1000,
-            color=color, lw=2, label=label,
-        )
-        ax.plot(
-            [sep_yos], [mc[key]["p50"] / 1000],
-            "o", color=color,
+            [sep_yos], [mc[key]["p50"] / 1000], "o",
+            color=color,
         )
     ax.axvline(
-        sep_yos, color="black", linewidth=0.8,
-        linestyle=":",
+        sep_yos, color="black", linewidth=0.8, linestyle=":",
     )
     ax.set_xlabel("Years of Service at Separation")
-    ax.set_ylabel("Lifetime Value (2026 $ thousands)")
+    ax.set_ylabel("Lifetime Value (2026 $)")
     ax.set_title(
         "Lifetime Value by System\n"
         "(median; shaded: P10–P90, 80% of outcomes)"
     )
     ax.yaxis.set_major_formatter(
-        plt.FuncFormatter(lambda x, _: f"${x:,.0f}K")
+        plt.FuncFormatter(lambda v, _: f"${v:,.0f}K")
     )
     ax.legend()
     ax.grid(True, alpha=0.3)
@@ -622,50 +700,129 @@ with ch1:
 with ch2:
     pcolor = PROFILE_COLORS[profile]
     fig, ax = plt.subplots(figsize=(7, 4.2))
-    ax.fill_between(
-        x,
-        mcc["brs_adv_p10"] / 1000,
-        mcc["brs_adv_p90"] / 1000,
-        alpha=0.18, color=pcolor,
-        label="P10–P90 (80% of outcomes)",
-    )
-    ax.fill_between(
-        x,
-        mcc["brs_adv_p25"] / 1000,
-        mcc["brs_adv_p75"] / 1000,
-        alpha=0.38, color=pcolor,
-        label="P25–P75 (50% of outcomes)",
-    )
+    pre = mcc[mcc["SepYOS"] < 20]
+    post = mcc[mcc["SepYOS"] >= 20]
+    if has_cliff:
+        cu = cusp["brs_adv"]
+        xp = list(pre["SepYOS"]) + [20]
+        # Bands extended to the cusp (TSP-only difference at
+        # 20, where both pensions are still zero).
+        ax.fill_between(
+            xp,
+            list(pre["brs_adv_p10"] / 1000)
+            + [cu["p10"] / 1000],
+            list(pre["brs_adv_p90"] / 1000)
+            + [cu["p90"] / 1000],
+            alpha=0.18, color=pcolor,
+            label="P10–P90 (80% of outcomes)",
+        )
+        ax.fill_between(
+            xp,
+            list(pre["brs_adv_p25"] / 1000)
+            + [cu["p25"] / 1000],
+            list(pre["brs_adv_p75"] / 1000)
+            + [cu["p75"] / 1000],
+            alpha=0.38, color=pcolor,
+            label="P25–P75 (50% of outcomes)",
+        )
+        ax.fill_between(
+            post["SepYOS"], post["brs_adv_p10"] / 1000,
+            post["brs_adv_p90"] / 1000,
+            alpha=0.18, color=pcolor,
+        )
+        ax.fill_between(
+            post["SepYOS"], post["brs_adv_p25"] / 1000,
+            post["brs_adv_p75"] / 1000,
+            alpha=0.38, color=pcolor,
+        )
+        # Median, broken at the cliff the same way.
+        ax.plot(
+            xp,
+            list(pre["brs_adv_p50"] / 1000)
+            + [cu["p50"] / 1000],
+            color=pcolor, lw=2, label="Median (P50)",
+        )
+        vested = post["brs_adv_p50"].iloc[0] / 1000
+        ax.plot(
+            [20], [cu["p50"] / 1000], "o", mfc="white",
+            mec=pcolor, mew=1.4, zorder=6,
+        )
+        ax.plot(
+            [20, 20], [cu["p50"] / 1000, vested],
+            ls=":", color=pcolor, lw=1.1, alpha=0.8,
+        )
+        ax.plot(
+            post["SepYOS"], post["brs_adv_p50"] / 1000,
+            color=pcolor, lw=2,
+        )
+        # Deterministic (03a), broken at the cliff too.
+        dpre = curve[curve["SepYOS"] < 20]
+        dpost = curve[curve["SepYOS"] >= 20]
+        dcusp = (
+            drow20["BRS_TSP_PV"] - drow20["H3TSP_PV"]
+        ) / 1000
+        ax.plot(
+            list(dpre["SepYOS"]) + [20],
+            list(dpre["BRSAdv"] / 1000) + [dcusp],
+            "k--", lw=1.2, label="Deterministic",
+        )
+        ax.plot(
+            dpost["SepYOS"], dpost["BRSAdv"] / 1000,
+            "k--", lw=1.2,
+        )
+    else:
+        ax.fill_between(
+            mcc["SepYOS"], mcc["brs_adv_p10"] / 1000,
+            mcc["brs_adv_p90"] / 1000,
+            alpha=0.18, color=pcolor,
+            label="P10–P90 (80% of outcomes)",
+        )
+        ax.fill_between(
+            mcc["SepYOS"], mcc["brs_adv_p25"] / 1000,
+            mcc["brs_adv_p75"] / 1000,
+            alpha=0.38, color=pcolor,
+            label="P25–P75 (50% of outcomes)",
+        )
+        ax.plot(
+            mcc["SepYOS"], mcc["brs_adv_p50"] / 1000,
+            color=pcolor, lw=2, label="Median (P50)",
+        )
+        ax.plot(
+            curve["SepYOS"], curve["BRSAdv"] / 1000,
+            "k--", lw=1.2, label="Deterministic",
+        )
     ax.plot(
-        x, mcc["brs_adv_p50"] / 1000,
-        color=pcolor, lw=2, label="Median (P50)",
+        [sep_yos], [mc["brs_adv"]["p50"] / 1000], "o",
+        color="black",
     )
-    ax.plot(
-        curve["SepYOS"], curve["BRSAdv"] / 1000,
-        "k--", lw=1.2, label="Deterministic",
-    )
-    ax.plot(
-        [sep_yos], [mc["brs_adv"]["p50"] / 1000],
-        "o", color="black",
-    )
-    ax.axhline(0, color="black", linewidth=0.8,
-               linestyle=":")
+    ax.axhline(0, color="black", linewidth=0.8, linestyle=":")
     ax.axvline(
-        sep_yos, color="black", linewidth=0.8,
-        linestyle=":",
+        sep_yos, color="black", linewidth=0.8, linestyle=":",
     )
     ax.set_xlabel("Years of Service at Separation")
-    ax.set_ylabel(
-        "Difference, BRS − H3 (2026 $ thousands)"
-    )
+    ax.set_ylabel("Lifetime Value Advantage (2026 $)")
     ax.set_title(
-        "Lifetime Value Difference\n"
-        "(above zero: BRS yields more)"
+        "Lifetime Value Difference: BRS vs. High-Three"
     )
     ax.yaxis.set_major_formatter(
-        plt.FuncFormatter(lambda x, _: f"${x:,.0f}K")
+        plt.FuncFormatter(lambda v, _: f"${abs(v):,.0f}K")
     )
-    ax.legend(fontsize=8, loc="lower left")
+    # All-positive magnitude axis; shade which system leads
+    # (slate = BRS advantage, brown = High-Three advantage).
+    ymin, ymax = ax.get_ylim()
+    ax.axhspan(0, ymax, color=BRS_REGION, alpha=0.18, zorder=0)
+    ax.axhspan(ymin, 0, color=H3_REGION, alpha=0.18, zorder=0)
+    ax.set_ylim(ymin, ymax)
+    ax.text(
+        0.03, 0.93, "BRS advantage", transform=ax.transAxes,
+        fontsize=9, style="italic", color="gray",
+    )
+    ax.text(
+        0.03, 0.07, "High-Three advantage",
+        transform=ax.transAxes, fontsize=9, style="italic",
+        color="gray",
+    )
+    ax.legend(fontsize=8, loc="upper right")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     st.pyplot(fig)

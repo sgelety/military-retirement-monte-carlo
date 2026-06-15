@@ -48,7 +48,7 @@ The project is implemented in Python using Jupyter Notebooks in VS Code.
 - **20-year cliff** is a discontinuity, not a slope: never connect YOS 18→20 directly. Split each series into pre-20 and 20+ segments; extend the pre-20 segment to its **value on the cusp of vesting** at 20 (the TSP-only difference, pensions zero on both sides below 20 — available deterministically as `BRS_TSP_PV − H3TSP_PV`; for MC bands recompute the TSP-only percentiles at 20 from the same-seed `run_scenario`), drawn as an **open marker** (limit not attained) with a dotted vertical drop to the filled vested value.
 - **Small multiples:** one shared x-label via `fig.supxlabel`, one legend (not one per panel).
 - **Units:** drop the unit word when the tick suffix implies it ("thousands" with `K` ticks, "billions" with `B` ticks); whole-number ticks where decimals add nothing.
-- **Status:** 03a, 03b, 04, 05 fully restyled. **Pending:** the Streamlit app fan charts (still on the old crimson/dimgray + signed axes). nb04/nb05 were edited via scripted JSON cell-replacement (they exceed the Read-tool size limit) and re-executed in place with the project `.venv` (`jupyter nbconvert --execute --inplace`). nb05 specifics: all five figures share a palette block in the setup cell (`BRS_COLOR`/`H3_COLOR`/`BRS_REGION`/`H3_REGION`/`PROFILE_COLORS`); the OAT tornado and scenario plot keep a **signed** axis (clearer for 4 crossing lines / a negative anchor) with direction stated in the axis label or via slate/brown region shading + "BRS advantage" / "High-Three advantage" labels — no red; the scenario curves apply the full cliff split (open-marker TSP-only cusp at 20 → dotted drop → filled vested marker), reusing the same seeded `run_scenario` (`brs_tsp_pv − h3_tsp_pv` P50) for the cusp; the two separation-shift bar charts use neutral gray (baseline) vs. the nb05 purple accent `#7a5195` (shifted) instead of profile colors; the obligation chart keeps nb04's green "saves" arrows but recolors the negative (drastic) case to H3 amber rather than crimson. Matplotlib `\$` must sit in a **raw** f-string (`rf"…"`) to avoid a Python 3.13 SyntaxWarning at cell execution.
+- **Status:** Styling pass complete — 03a, 03b, 04, 05 and the Streamlit app fan charts all restyled. nb04/nb05 were edited via scripted JSON cell-replacement (they exceed the Read-tool size limit) and re-executed in place with the project `.venv` (`jupyter nbconvert --execute --inplace`). nb05 specifics: all five figures share a palette block in the setup cell (`BRS_COLOR`/`H3_COLOR`/`BRS_REGION`/`H3_REGION`/`PROFILE_COLORS`); the OAT tornado and scenario plot keep a **signed** axis (clearer for 4 crossing lines / a negative anchor) with direction stated in the axis label or via slate/brown region shading + "BRS advantage" / "High-Three advantage" labels — no red; the scenario curves apply the full cliff split (open-marker TSP-only cusp at 20 → dotted drop → filled vested marker), reusing the same seeded `run_scenario` (`brs_tsp_pv − h3_tsp_pv` P50) for the cusp; the two separation-shift bar charts use neutral gray (baseline) vs. the nb05 purple accent `#7a5195` (shifted) instead of profile colors; the obligation chart keeps nb04's green "saves" arrows but recolors the negative (drastic) case to H3 amber rather than crimson. Matplotlib `\$` must sit in a **raw** f-string (`rf"…"`) to avoid a Python 3.13 SyntaxWarning at cell execution. App fan charts: recolored to BRS-blue/H3-amber, the difference chart now uses the all-positive magnitude axis + slate/brown region shading, and both fans apply the cliff split — a new `mc_cusp()` in `app/scenario_calcs.py` (cached via `cached_mc_cusp`) recomputes the TSP-only percentiles at YOS 20 from the same per-YOS-seeded `run_scenario`, gated on `has_cliff` (career reaches 20).
 
 **Monte Carlo stochastic variables (all others held fixed within each scenario):**
 1. TSP investment returns (parameterized from TSP L Fund historical data)
@@ -324,8 +324,16 @@ repo root: `streamlit run app/streamlit_app.py`.
   chosen so a public deployment never has a dead or billing-risky
   feature. The Anthropic API is deliberately not used (user
   decision: no paid key; Gemini free tier + built-in fallback).
-- System colors in the app: H3 dimgray, BRS crimson — deliberately
-  disjoint from the profile palette.
+- System colors in the app match the notebooks: H3 amber
+  `#c1843d`, BRS blue `#3a7ebf` (with `BRS_REGION` slate /
+  `H3_REGION` brown for the difference chart's halves). The fan
+  charts follow the notebook conventions — the difference chart
+  uses the all-positive magnitude axis with slate/brown region
+  shading + "BRS advantage" / "High-Three advantage" labels, and
+  both fans (totals and difference) break at the 20-YOS cliff
+  (open-marker cusp → dotted drop → vested), keeping the profile
+  color on the difference band. (Earlier the app used a
+  deliberately disjoint dimgray/crimson + signed axes; superseded.)
 - Streamlit markdown treats `$...$` as LaTeX exactly like notebook
   markdown: every dollar amount rendered via `st.markdown` /
   `st.caption` must pass through the app's `esc_md` helper
