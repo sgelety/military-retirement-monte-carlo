@@ -88,8 +88,8 @@ Pension status: {pension}.
 
 Member lifetime value (NPV at separation, constant 2026 $):
 - Difference (BRS - H3), median: {_fmt(adv['p50'])}
-- Difference percentile band (P10 to P90): \
-{_fmt(adv['p10'])} to {_fmt(adv['p90'])}
+- Difference, middle 50% (P25 to P75): \
+{_fmt(adv['p25'])} to {_fmt(adv['p75'])}
 - Components (Monte Carlo means):
   - Pension NPV: High-Three {_fmt(cm['h3_pension'])}, \
 BRS {_fmt(cm['brs_pension'])}
@@ -224,9 +224,9 @@ def _explain_builtin(
 
     p3 = (
         "These figures are medians across 20,000 simulated "
-        "futures; the middle 80% of outcomes for the difference "
-        f"runs from {_fmt_k(adv['p10'])} to "
-        f"{_fmt_k(adv['p90'])}, in constant 2026 dollars at "
+        "futures; the middle 50% of outcomes for the difference "
+        f"runs from {_fmt_k(adv['p25'])} to "
+        f"{_fmt_k(adv['p75'])}, in constant 2026 dollars at "
         "separation."
     )
 

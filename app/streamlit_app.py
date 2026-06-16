@@ -114,10 +114,10 @@ HOW_IT_WORKS = (
     "Administration's actuarial tables, given your age at "
     "separation — because a pension's value depends "
     "enormously on how many years it actually pays.\n\n"
-    "The chart dots and the P10–P90 band show the spread "
+    "The chart line and the shaded band show the spread "
     "across those 20,000 futures: the median is the middle "
-    "outcome, and 80% of simulated futures land inside the "
-    "band.\n\n"
+    "outcome, and the band holds the middle 50% — half of "
+    "all simulated futures land inside it.\n\n"
     "**Why everything is in \"2026 dollars at separation\".** "
     "A dollar promised in 2055 is worth less than a dollar "
     "today — both because of inflation and because money in "
@@ -541,8 +541,8 @@ with left:
         fmt_usd(adv["p50"]),
     )
     st.caption(esc_md(
-        f"Monte Carlo P10–P90 (80% of outcomes): {fmt_usd(adv['p10'])} "
-        f"to {fmt_usd(adv['p90'])} · mean "
+        f"Monte Carlo middle 50% of outcomes: "
+        f"{fmt_usd(adv['p25'])} to {fmt_usd(adv['p75'])} · mean "
         f"{fmt_usd(adv['mean'])} · N={n_iter:,}"
     ))
     cm = mc["component_means"]
@@ -613,8 +613,8 @@ with right:
 st.subheader("Where your career sits on the cliff")
 st.caption(
     f"Market outlook: {outlook}. Lines are Monte Carlo "
-    "medians across every possible separation year; shaded "
-    f"bands show the spread over {n_iter:,} simulated "
+    "medians across every possible separation year; the "
+    f"shaded band is the middle 50% of {n_iter:,} simulated "
     "futures."
 )
 ch1, ch2 = st.columns(2)
@@ -623,7 +623,7 @@ with ch1:
     fig, ax = plt.subplots(figsize=(7, 4.2))
     pre = mcc[mcc["SepYOS"] < 20]
     post = mcc[mcc["SepYOS"] >= 20]
-    bands = [("p10", "p90", 0.12), ("p25", "p75", 0.25)]
+    bands = [("p25", "p75", 0.22)]
     for key, color, label in [
         ("h3_govt", H3_COLOR, "High-Three"),
         ("brs_govt", BRS_COLOR, "BRS"),
@@ -631,8 +631,8 @@ with ch1:
         if has_cliff:
             cu = cusp[key]
             xp = list(pre["SepYOS"]) + [20]
-            # P10–P90 and P25–P75 bands, each extended to its
-            # value on the cusp of vesting at 20 (TSP only).
+            # P25–P75 band, extended to its value on the cusp
+            # of vesting at 20 (TSP only, no pension yet).
             for lo, hi, a in bands:
                 ax.fill_between(
                     xp,
@@ -698,10 +698,8 @@ with ch1:
     # Gray proxies explain the (per-system colored) bands.
     sys_h, sys_l = ax.get_legend_handles_labels()
     band_h = [
-        Patch(facecolor="0.5", alpha=0.30,
-              label="P10–P90 (80% of outcomes)"),
-        Patch(facecolor="0.5", alpha=0.60,
-              label="P25–P75 (50% of outcomes)"),
+        Patch(facecolor="0.5", alpha=0.45,
+              label="Middle 50% of outcomes"),
     ]
     ax.legend(
         sys_h + band_h,
@@ -725,26 +723,12 @@ with ch2:
         # 20, where both pensions are still zero).
         ax.fill_between(
             xp,
-            list(pre["brs_adv_p10"] / 1000)
-            + [cu["p10"] / 1000],
-            list(pre["brs_adv_p90"] / 1000)
-            + [cu["p90"] / 1000],
-            alpha=0.18, color=pcolor,
-            label="P10–P90 (80% of outcomes)",
-        )
-        ax.fill_between(
-            xp,
             list(pre["brs_adv_p25"] / 1000)
             + [cu["p25"] / 1000],
             list(pre["brs_adv_p75"] / 1000)
             + [cu["p75"] / 1000],
             alpha=0.38, color=pcolor,
-            label="P25–P75 (50% of outcomes)",
-        )
-        ax.fill_between(
-            post["SepYOS"], post["brs_adv_p10"] / 1000,
-            post["brs_adv_p90"] / 1000,
-            alpha=0.18, color=pcolor,
+            label="Middle 50% of outcomes",
         )
         ax.fill_between(
             post["SepYOS"], post["brs_adv_p25"] / 1000,
@@ -756,7 +740,7 @@ with ch2:
             xp,
             list(pre["brs_adv_p50"] / 1000)
             + [cu["p50"] / 1000],
-            color=pcolor, lw=2, label="Median (P50)",
+            color=pcolor, lw=2, label="Median",
         )
         vested = post["brs_adv_p50"].iloc[0] / 1000
         ax.plot(
@@ -788,20 +772,14 @@ with ch2:
         )
     else:
         ax.fill_between(
-            mcc["SepYOS"], mcc["brs_adv_p10"] / 1000,
-            mcc["brs_adv_p90"] / 1000,
-            alpha=0.18, color=pcolor,
-            label="P10–P90 (80% of outcomes)",
-        )
-        ax.fill_between(
             mcc["SepYOS"], mcc["brs_adv_p25"] / 1000,
             mcc["brs_adv_p75"] / 1000,
             alpha=0.38, color=pcolor,
-            label="P25–P75 (50% of outcomes)",
+            label="Middle 50% of outcomes",
         )
         ax.plot(
             mcc["SepYOS"], mcc["brs_adv_p50"] / 1000,
-            color=pcolor, lw=2, label="Median (P50)",
+            color=pcolor, lw=2, label="Median",
         )
         ax.plot(
             curve["SepYOS"], curve["BRSAdv"] / 1000,
