@@ -14,6 +14,7 @@ All values are NPV at separation in constant 2026 dollars.
 import sys
 from pathlib import Path
 
+import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 import pandas as pd
@@ -25,17 +26,16 @@ import scenario_calcs as sc  # noqa: E402
 from explain import explain_scenario  # noqa: E402
 
 # System colors — the notebooks' palette: BRS bright
-# blue, High-Three bright amber (deliberately not red).
-# The muted slate / brown versions shade the difference
-# chart's two halves.
-H3_COLOR = "#c1843d"
-BRS_COLOR = "#3a7ebf"
-BRS_REGION = "#3f5266"
-H3_REGION = "#8a6033"
+# Michigan blue, High-Three Michigan maize. The light blue /
+# maize versions shade the difference chart's two halves.
+H3_COLOR = "#FFCB05"
+BRS_COLOR = "#00274C"
+BRS_REGION = "#4B6C8F"
+H3_REGION = "#FFE57F"
 PROFILE_COLORS = {
-    "Enlisted": "darkorange",
-    "PriorEnlistedOfficer": "forestgreen",
-    "Officer": "steelblue",
+    "Enlisted": "#D86018",
+    "PriorEnlistedOfficer": "#75988d",
+    "Officer": "#575294",
 }
 
 st.set_page_config(
@@ -50,17 +50,71 @@ def fmt_usd(x):
     return f"{sign}${abs(x):,.0f}"
 
 
-def theme_fg():
-    """Foreground color for matplotlib text matching the app theme.
-
-    Streamlit's default text is #fafafa on dark, #262730 on light.
-    Falls back to the light value if the theme can't be read.
+def theme():
+    """Theme-aware chart colors so figures blend into the app's
+    light or dark page. On dark, the few palette colors that would
+    vanish against the dark background (the navy BRS line and the
+    navy / dark-gold advantage labels) are lightened; maize and
+    profile colors carry over unchanged. Falls back to light.
     """
     try:
         is_dark = st.context.theme.type == "dark"
     except Exception:  # noqa: BLE001 — theme may be unavailable
         is_dark = False
-    return "#fafafa" if is_dark else "#262730"
+    if is_dark:
+        return {
+            "dark": True,
+            "fg": "#fafafa",
+            "bg": "#0e1117",
+            "brs": "#7fb2e8",       # brightened Michigan blue
+            "brs_label": "#9bbfe0",
+            "h3_label": "#ddbb66",  # light gold
+            # Brightened profile colors so the difference fan
+            # pops against the dark page (the sage green and
+            # violet read dim at full saturation on dark).
+            "profiles": {
+                "Enlisted": "#F0843C",
+                "PriorEnlistedOfficer": "#93C7B2",
+                "Officer": "#8F89CE",
+            },
+        }
+    return {
+        "dark": False,
+        "fg": "#262730",
+        "bg": "#ffffff",
+        "brs": BRS_COLOR,
+        "brs_label": "#00274C",
+        "h3_label": "#6b540f",
+        "profiles": PROFILE_COLORS,
+    }
+
+
+def theme_fg():
+    """Foreground (text/axes) color for the current app theme."""
+    return theme()["fg"]
+
+
+def apply_chart_theme(tc):
+    """Blend every matplotlib figure into the app theme via
+    rcParams: transparent backgrounds, foreground-colored text,
+    axes, ticks, grid, and a page-colored legend box.
+    """
+    plt.rcParams.update({
+        "figure.facecolor": "none",
+        "axes.facecolor": "none",
+        "savefig.facecolor": "none",
+        "savefig.edgecolor": "none",
+        "text.color": tc["fg"],
+        "axes.labelcolor": tc["fg"],
+        "axes.edgecolor": tc["fg"],
+        "axes.titlecolor": tc["fg"],
+        "xtick.color": tc["fg"],
+        "ytick.color": tc["fg"],
+        "grid.color": tc["fg"],
+        "legend.facecolor": tc["bg"],
+        "legend.edgecolor": tc["fg"],
+        "legend.framealpha": 0.85,
+    })
 
 
 def esc_md(text):
@@ -472,15 +526,17 @@ for yos, grade in grades.loc[:sep_yos].items():
     else:
         runs.append([grade, yos, yos])
 
-fg = theme_fg()
+tc = theme()
+apply_chart_theme(tc)
+fg = tc["fg"]
 fig, ax = plt.subplots(figsize=(10, 0.9))
 fig.patch.set_alpha(0.0)  # blend with the app's page background
 ax.patch.set_alpha(0.0)
 for grade, start, end in runs:
     color = (
-        "navajowhite"
+        "#F0C9A8"  # light Ross-orange tint (E grades)
         if str(grade).startswith("E")
-        else "lightsteelblue"
+        else "#C3C0DA"  # light Matthaei-violet tint (O grades)
     )
     ax.barh(
         0, end - start + 1, left=start, height=0.8,
@@ -626,8 +682,15 @@ with ch1:
     bands = [("p25", "p75", 0.22)]
     for key, color, label in [
         ("h3_govt", H3_COLOR, "High-Three"),
-        ("brs_govt", BRS_COLOR, "BRS"),
+        ("brs_govt", tc["brs"], "BRS"),
     ]:
+        # The maize H3 line is faint on white; give it a thin
+        # navy outline (matching the maize bars' navy edge).
+        line_pe = (
+            [pe.Stroke(linewidth=2.8, foreground=BRS_COLOR),
+             pe.Normal()]
+            if key == "h3_govt" else None
+        )
         if has_cliff:
             cu = cusp[key]
             xp = list(pre["SepYOS"]) + [20]
@@ -654,10 +717,11 @@ with ch1:
                 list(pre[f"{key}_p50"] / 1000)
                 + [cu["p50"] / 1000],
                 color=color, lw=2, label=label,
+                path_effects=line_pe,
             )
             vested = post[f"{key}_p50"].iloc[0] / 1000
             ax.plot(
-                [20], [cu["p50"] / 1000], "o", mfc="white",
+                [20], [cu["p50"] / 1000], "o", mfc=tc["bg"],
                 mec=color, mew=1.4, zorder=6,
             )
             ax.plot(
@@ -666,7 +730,7 @@ with ch1:
             )
             ax.plot(
                 post["SepYOS"], post[f"{key}_p50"] / 1000,
-                color=color, lw=2,
+                color=color, lw=2, path_effects=line_pe,
             )
         else:
             for lo, hi, a in bands:
@@ -678,13 +742,14 @@ with ch1:
             ax.plot(
                 mcc["SepYOS"], mcc[f"{key}_p50"] / 1000,
                 color=color, lw=2, label=label,
+                path_effects=line_pe,
             )
         ax.plot(
             [sep_yos], [mc[key]["p50"] / 1000], "o",
             color=color,
         )
     ax.axvline(
-        sep_yos, color="black", linewidth=0.8, linestyle=":",
+        sep_yos, color=fg, linewidth=0.8, linestyle=":",
     )
     ax.set_xlabel("Years of Service at Separation")
     ax.set_ylabel("Government-Funded Value (2026 $)")
@@ -712,7 +777,7 @@ with ch1:
     plt.close(fig)
 
 with ch2:
-    pcolor = PROFILE_COLORS[profile]
+    pcolor = tc["profiles"][profile]
     fig, ax = plt.subplots(figsize=(7, 4.2))
     pre = mcc[mcc["SepYOS"] < 20]
     post = mcc[mcc["SepYOS"] >= 20]
@@ -744,7 +809,7 @@ with ch2:
         )
         vested = post["brs_adv_p50"].iloc[0] / 1000
         ax.plot(
-            [20], [cu["p50"] / 1000], "o", mfc="white",
+            [20], [cu["p50"] / 1000], "o", mfc=tc["bg"],
             mec=pcolor, mew=1.4, zorder=6,
         )
         ax.plot(
@@ -764,11 +829,11 @@ with ch2:
         ax.plot(
             list(dpre["SepYOS"]) + [20],
             list(dpre["BRSAdv"] / 1000) + [dcusp],
-            "k--", lw=1.2, label="Deterministic",
+            color=fg, ls="--", lw=1.2, label="Deterministic",
         )
         ax.plot(
             dpost["SepYOS"], dpost["BRSAdv"] / 1000,
-            "k--", lw=1.2,
+            color=fg, ls="--", lw=1.2,
         )
     else:
         ax.fill_between(
@@ -783,15 +848,15 @@ with ch2:
         )
         ax.plot(
             curve["SepYOS"], curve["BRSAdv"] / 1000,
-            "k--", lw=1.2, label="Deterministic",
+            color=fg, ls="--", lw=1.2, label="Deterministic",
         )
     ax.plot(
         [sep_yos], [mc["brs_adv"]["p50"] / 1000], "o",
-        color="black",
+        color=fg,
     )
-    ax.axhline(0, color="black", linewidth=0.8, linestyle=":")
+    ax.axhline(0, color=fg, linewidth=0.8, linestyle=":")
     ax.axvline(
-        sep_yos, color="black", linewidth=0.8, linestyle=":",
+        sep_yos, color=fg, linewidth=0.8, linestyle=":",
     )
     ax.set_xlabel("Years of Service at Separation")
     ax.set_ylabel("Lifetime Value Advantage (2026 $)")
@@ -802,19 +867,19 @@ with ch2:
         plt.FuncFormatter(lambda v, _: f"${abs(v):,.0f}K")
     )
     # All-positive magnitude axis; shade which system leads
-    # (slate = BRS advantage, brown = High-Three advantage).
+    # (light blue = BRS advantage, light maize = High-Three).
     ymin, ymax = ax.get_ylim()
     ax.axhspan(0, ymax, color=BRS_REGION, alpha=0.18, zorder=0)
     ax.axhspan(ymin, 0, color=H3_REGION, alpha=0.18, zorder=0)
     ax.set_ylim(ymin, ymax)
     ax.text(
         0.03, 0.93, "BRS advantage", transform=ax.transAxes,
-        fontsize=9, style="italic", color="gray",
+        fontsize=9, style="italic", color=tc["brs_label"],
     )
     ax.text(
         0.03, 0.07, "High-Three advantage",
         transform=ax.transAxes, fontsize=9, style="italic",
-        color="gray",
+        color=tc["h3_label"],
     )
     ax.legend(fontsize=8, loc="upper right")
     ax.grid(True, alpha=0.3)

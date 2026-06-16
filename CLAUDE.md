@@ -40,15 +40,15 @@ The project is implemented in Python using Jupyter Notebooks in VS Code.
 
 **Results framing:** Expressed as "lifetime value difference (BRS − H3)." Positive values indicate BRS yields higher lifetime value; negative values indicate High-Three yields higher lifetime value. Avoids editorializing about which system is "better."
 
-**Presentation conventions:** Cross-profile displays (charts, pivots, printed tables) use the order Enlisted → Prior-Enlisted Officer → Officer via a `PROFILE_ORDER` constant in each notebook; computation/run loops keep their original order to preserve per-scenario seeds and MC draw sequences. Profile colors: Enlisted darkorange, PEO forestgreen, Officer steelblue. Escape `$` as `\$` in notebook markdown (paired dollars otherwise render as LaTeX math).
+**Presentation conventions:** Cross-profile displays (charts, pivots, printed tables) use the order Enlisted → Prior-Enlisted Officer → Officer via a `PROFILE_ORDER` constant in each notebook; computation/run loops keep their original order to preserve per-scenario seeds and MC draw sequences. Profile colors (University of Michigan palette): Enlisted Ross orange `#D86018`, PEO Rackham green `#75988d`, Officer Matthaei violet `#575294`. Escape `$` as `\$` in notebook markdown (paired dollars otherwise render as LaTeX math).
 
 **Chart styling conventions (visual pass, 2026-06-14 — applies to results figures):**
-- **Palette.** Profile colors as above. System colors for cost-comparison bars: BRS = bright blue `#3a7ebf`, H3 = bright amber `#c1843d`. Difference-chart region shading (the muted versions): BRS-advantage half = slate `#3f5266`, H3-advantage half = brown `#8a6033`, both at alpha 0.18. (nb04 defines these as `BRS_COLOR`/`H3_COLOR`/`BRS_REGION`/`H3_REGION` in its constants cell.) Deliberately not red.
-- **Difference charts** (lifetime value BRS − H3): all-positive axis — keep the data signed but the tick formatter shows magnitude (`f"${abs(x):,.0f}K"`); shade above 0 slate / below 0 brown with italic region labels "BRS advantage" / "High-Three advantage" (gray; off the y=0 line where lines converge). Y-label "Lifetime Value Advantage (2026 $)" (no "BRS − H3", no "thousands"). matplotlib `$` in text/titles must be escaped `\$` (mathtext).
+- **Palette (University of Michigan, applied 2026-06-15).** Profile colors as above. System colors for cost-comparison bars: BRS = Michigan blue `#00274C`, H3 = Michigan maize `#FFCB05`. Difference-chart region shading (the light versions): BRS-advantage half = light blue `#4B6C8F`, H3-advantage half = light maize `#FFE57F`, both at alpha 0.18. (nb04 defines these as `BRS_COLOR`/`H3_COLOR`/`BRS_REGION`/`H3_REGION` in its constants cell; nb05 and the app mirror them.) **Maize bars** carry a thin navy `#00274C` edge (`linewidth=0.5`) and **no alpha fade** so they read against the white background; BRS bars get the same edge for symmetry. **Maize as text or a thin line is unreadable on white** — for H3-side text labels (e.g. the tornado value labels, the obligation negative-savings annotation) use dark gold `#6b540f` instead; maize is reserved for bar fills and the H3 lines. **Diagnostic / methodological charts use the default Matplotlib color cycle, not the UM palette** — the UM/system colors are reserved for the actual BRS-vs-H3 comparison data and the three profiles. This covers nb03b's input-distribution histograms (default blue `#1f77b4`, alpha 0.8 across all six panels), the nb03b/nb04 convergence plots (default cycle), and nb05's scenario plot (Base/Bull/Bear/Low-Participation in default blue/orange/green/red).
+- **Difference charts** (lifetime value BRS − H3): all-positive axis — keep the data signed but the tick formatter shows magnitude (`f"${abs(x):,.0f}K"`); shade above 0 light blue / below 0 light maize with italic region labels "BRS advantage" (UM blue `#00274C`) / "High-Three advantage" (dark gold `#6b540f`; off the y=0 line where lines converge). Y-label "Lifetime Value Advantage (2026 $)" (no "BRS − H3", no "thousands"). matplotlib `$` in text/titles must be escaped `\$` (mathtext).
 - **20-year cliff** is a discontinuity, not a slope: never connect YOS 18→20 directly. Split each series into pre-20 and 20+ segments; extend the pre-20 segment to its **value on the cusp of vesting** at 20 (the TSP-only difference, pensions zero on both sides below 20 — available deterministically as `BRS_TSP_PV − H3TSP_PV`; for MC bands recompute the TSP-only percentiles at 20 from the same-seed `run_scenario`), drawn as an **open marker** (limit not attained) with a dotted vertical drop to the filled vested value.
 - **Small multiples:** one shared x-label via `fig.supxlabel`, one legend (not one per panel).
 - **Units:** drop the unit word when the tick suffix implies it ("thousands" with `K` ticks, "billions" with `B` ticks); whole-number ticks where decimals add nothing.
-- **Status:** Styling pass complete — 03a, 03b, 04, 05 and the Streamlit app fan charts all restyled. nb04/nb05 were edited via scripted JSON cell-replacement (they exceed the Read-tool size limit) and re-executed in place with the project `.venv` (`jupyter nbconvert --execute --inplace`). nb05 specifics: all five figures share a palette block in the setup cell (`BRS_COLOR`/`H3_COLOR`/`BRS_REGION`/`H3_REGION`/`PROFILE_COLORS`); the OAT tornado and scenario plot keep a **signed** axis (clearer for 4 crossing lines / a negative anchor) with direction stated in the axis label or via slate/brown region shading + "BRS advantage" / "High-Three advantage" labels — no red; the scenario curves apply the full cliff split (open-marker TSP-only cusp at 20 → dotted drop → filled vested marker), reusing the same seeded `run_scenario` (`brs_tsp_pv − h3_tsp_pv` P50) for the cusp; the two separation-shift bar charts use neutral gray (baseline) vs. the nb05 purple accent `#7a5195` (shifted) instead of profile colors; the obligation chart keeps nb04's green "saves" arrows but recolors the negative (drastic) case to H3 amber rather than crimson. Matplotlib `\$` must sit in a **raw** f-string (`rf"…"`) to avoid a Python 3.13 SyntaxWarning at cell execution. App fan charts: recolored to BRS-blue/H3-amber, the difference chart now uses the all-positive magnitude axis + slate/brown region shading, and both fans apply the cliff split — a new `mc_cusp()` in `app/scenario_calcs.py` (cached via `cached_mc_cusp`) recomputes the cusp percentiles at YOS 20 from the same per-YOS-seeded `run_scenario`, gated on `has_cliff` (career reaches 20). The left fan was reframed from absolute lifetime totals to **government-funded value** (`h3_govt` = pension; `brs_govt` = pension + govt TSP), excluding the member's own 5% — which is identical under both systems and cancels in the difference — so High-Three reads exactly \$0 below 20 (matching the project's difference framing; absolute member totals are charted nowhere else). `mc_curve`/`mc_cusp`/`mc_from_curve_row` gained the `h3_govt`/`brs_govt` percentile columns/keys.
+- **Status:** Styling pass complete — 03a, 03b, 04, 05 and the Streamlit app fan charts all restyled. nb04/nb05 were edited via scripted JSON cell-replacement (they exceed the Read-tool size limit) and re-executed in place with the project `.venv` (`jupyter nbconvert --execute --inplace`). nb05 specifics: all five figures share a palette block in the setup cell (`BRS_COLOR`/`H3_COLOR`/`BRS_REGION`/`H3_REGION`/`PROFILE_COLORS`); the OAT tornado and scenario plot keep a **signed** axis (clearer for 4 crossing lines / a negative anchor) with direction stated in the axis label or via light-blue/light-maize region shading + "BRS advantage" (UM blue) / "High-Three advantage" (dark gold) labels. The OAT tornado uses the maize/blue system bars (navy-edged, H3-side value labels in dark gold); the **scenario plot** uses the four Matplotlib default-cycle colors — blue/orange/green/red for Base/Bull/Bear/Low-Participation — matching the convergence chart, a deliberate exception to the system palette (user decision 2026-06-15). The scenario curves apply the full cliff split (open-marker TSP-only cusp at 20 → dotted drop → filled vested marker), reusing the same seeded `run_scenario` (`brs_tsp_pv − h3_tsp_pv` P50) for the cusp; the two separation-shift bar charts use each panel's profile color for the shifted bars and a lighter tint of it (`PROFILE_LIGHT` in the palette cell, ~50% toward white) for the de-emphasized baseline bars; the obligation chart keeps the green "saves" arrows for the regimes where BRS is cheaper but draws the negative (drastic) "BRS costs" arrow+label in red — red is allowed here to flag the regime where BRS costs more (the project's earlier "no red" note applied only to the system/profile palette, not to this warning annotation). Matplotlib `\$` must sit in a **raw** f-string (`rf"…"`) to avoid a Python 3.13 SyntaxWarning at cell execution. App fan charts: recolored to BRS-blue/H3-maize, the difference chart now uses the all-positive magnitude axis + light-blue/light-maize region shading, and both fans apply the cliff split — a new `mc_cusp()` in `app/scenario_calcs.py` (cached via `cached_mc_cusp`) recomputes the cusp percentiles at YOS 20 from the same per-YOS-seeded `run_scenario`, gated on `has_cliff` (career reaches 20). The left fan was reframed from absolute lifetime totals to **government-funded value** (`h3_govt` = pension; `brs_govt` = pension + govt TSP), excluding the member's own 5% — which is identical under both systems and cancels in the difference — so High-Three reads exactly \$0 below 20 (matching the project's difference framing; absolute member totals are charted nowhere else). `mc_curve`/`mc_cusp`/`mc_from_curve_row` gained the `h3_govt`/`brs_govt` percentile columns/keys.
 
 **Monte Carlo stochastic variables (all others held fixed within each scenario):**
 1. TSP investment returns (parameterized from TSP L Fund historical data)
@@ -324,12 +324,14 @@ repo root: `streamlit run app/streamlit_app.py`.
   chosen so a public deployment never has a dead or billing-risky
   feature. The Anthropic API is deliberately not used (user
   decision: no paid key; Gemini free tier + built-in fallback).
-- System colors in the app match the notebooks: H3 amber
-  `#c1843d`, BRS blue `#3a7ebf` (with `BRS_REGION` slate /
-  `H3_REGION` brown for the difference chart's halves). The fan
+- System colors in the app match the notebooks: H3 Michigan maize
+  `#FFCB05`, BRS Michigan blue `#00274C` (with `BRS_REGION` light
+  blue `#4B6C8F` / `H3_REGION` light maize `#FFE57F` for the
+  difference chart's halves). The fan
   charts follow the notebook conventions — the difference chart
-  uses the all-positive magnitude axis with slate/brown region
-  shading + "BRS advantage" / "High-Three advantage" labels, and
+  uses the all-positive magnitude axis with light-blue/light-maize
+  region shading + "BRS advantage" (UM blue) / "High-Three
+  advantage" (dark gold `#6b540f`) labels, and
   both fans break at the 20-YOS cliff (open-marker cusp → dotted
   drop → vested), keeping the profile color on the difference
   band. The left fan shows **government-funded value** by system
@@ -338,6 +340,24 @@ repo root: `streamlit run app/streamlit_app.py`.
   so High-Three is \$0 below 20. (Earlier the app used a
   deliberately disjoint dimgray/crimson, signed axes, and plotted
   absolute member totals; superseded.)
+- **Theme-aware charts (dark mode).** Every app figure blends into
+  the Streamlit page via `apply_chart_theme(tc)`, which sets
+  matplotlib `rcParams` once per run: transparent figure/axes
+  backgrounds, foreground-colored text/ticks/spines/grid, and a
+  page-colored legend box. `theme()` reads `st.context.theme.type`
+  and returns the palette — on **light** it is the exact notebook
+  values; on **dark** it lightens only the colors that would vanish
+  against the dark page: BRS line → brighter blue `#7fb2e8`, the
+  advantage labels → light blue `#9bbfe0` / light gold `#ddbb66`,
+  and the profile colors used in the difference fan → brightened
+  (`#F0843C` / `#93C7B2` / `#8F89CE`) so the fans pop. The maize H3
+  line is unchanged (bright on either background; its navy outline
+  simply disappears on dark). Black accents — the deterministic
+  dash, the zero/your-YOS reference lines, the selected-point dot —
+  switch to `fg`, and open-marker fills use the page `bg`. Because
+  backgrounds are transparent, charts sit on whatever the real page
+  color is, not a hardcoded one. `theme_fg()` (rank strip) now
+  delegates to `theme()`.
 - Streamlit markdown treats `$...$` as LaTeX exactly like notebook
   markdown: every dollar amount rendered via `st.markdown` /
   `st.caption` must pass through the app's `esc_md` helper
@@ -349,7 +369,8 @@ repo root: `streamlit run app/streamlit_app.py`.
   expander at the bottom remains the fine print. Keep both in sync
   with any model change.
 - A rank-timeline strip (horizontal bar of grade tenures, E grades
-  navajowhite / O grades lightsteelblue) sits under the snapshot
+  light Ross-orange tint `#F0C9A8` / O grades light Matthaei-violet
+  tint `#C3C0DA`) sits under the snapshot
   metrics; a native multi-handle slider for promotion input was
   considered and rejected (needs a custom JS component).
 - Headless testing: `streamlit.testing.v1.AppTest` runs the app
