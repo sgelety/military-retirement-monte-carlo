@@ -340,6 +340,18 @@ def mc_curve(
             summ = percentile_summary(res[key])
             for p in _PCTS:
                 row[f"{key}_{p}"] = summ[p]
+        # Government-funded value (member's own 5% TSP
+        # excluded, since it is identical under both):
+        # H3 = pension; BRS = pension + government TSP.
+        govt = {
+            "h3_govt": res["h3_pension_npv"],
+            "brs_govt": res["brs_pension_npv"]
+            + (res["brs_tsp_pv"] - res["h3_tsp_pv"]),
+        }
+        for name, vec in govt.items():
+            summ = percentile_summary(vec)
+            for p in _PCTS:
+                row[f"{name}_{p}"] = summ[p]
         # Means are additive across components; medians aren't.
         row["h3_pension_mean"] = float(
             res["h3_pension_npv"].mean()
@@ -383,12 +395,18 @@ def mc_cusp(
         discount_rate=discount_rate, seed=seed + 20,
         member_rate=member_rate,
     )
+    # At the cusp both pensions are still zero, so the
+    # government-funded value is 0 for H3 and the govt TSP
+    # for BRS (= the brs_adv cusp).
+    govt_tsp = percentile_summary(
+        res["brs_tsp_pv"] - res["h3_tsp_pv"]
+    )
     return {
         "h3_total": percentile_summary(res["h3_tsp_pv"]),
         "brs_total": percentile_summary(res["brs_tsp_pv"]),
-        "brs_adv": percentile_summary(
-            res["brs_tsp_pv"] - res["h3_tsp_pv"]
-        ),
+        "brs_adv": govt_tsp,
+        "h3_govt": {p: 0.0 for p in _PCTS},
+        "brs_govt": govt_tsp,
     }
 
 
@@ -398,6 +416,10 @@ def mc_from_curve_row(row):
         key: {p: float(row[f"{key}_{p}"]) for p in _PCTS}
         for key in _MC_KEYS
     }
+    for key in ("h3_govt", "brs_govt"):
+        out[key] = {
+            p: float(row[f"{key}_{p}"]) for p in _PCTS
+        }
     out["component_means"] = {
         "h3_pension": float(row["h3_pension_mean"]),
         "brs_pension": float(row["brs_pension_mean"]),

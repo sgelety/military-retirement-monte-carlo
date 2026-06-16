@@ -623,8 +623,8 @@ with ch1:
     pre = mcc[mcc["SepYOS"] < 20]
     post = mcc[mcc["SepYOS"] >= 20]
     for key, color, label in [
-        ("h3_total", H3_COLOR, "High-Three"),
-        ("brs_total", BRS_COLOR, "BRS"),
+        ("h3_govt", H3_COLOR, "High-Three"),
+        ("brs_govt", BRS_COLOR, "BRS"),
     ]:
         if has_cliff:
             cu = cusp[key]
@@ -683,10 +683,10 @@ with ch1:
         sep_yos, color="black", linewidth=0.8, linestyle=":",
     )
     ax.set_xlabel("Years of Service at Separation")
-    ax.set_ylabel("Lifetime Value (2026 $)")
+    ax.set_ylabel("Government-Funded Value (2026 $)")
     ax.set_title(
-        "Lifetime Value by System\n"
-        "(median; shaded: P10–P90, 80% of outcomes)"
+        "Government-Funded Value by System\n"
+        "(excludes your own 5% TSP — identical under both)"
     )
     ax.yaxis.set_major_formatter(
         plt.FuncFormatter(lambda v, _: f"${v:,.0f}K")
