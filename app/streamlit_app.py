@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import pandas as pd
 import streamlit as st
 
@@ -622,6 +623,7 @@ with ch1:
     fig, ax = plt.subplots(figsize=(7, 4.2))
     pre = mcc[mcc["SepYOS"] < 20]
     post = mcc[mcc["SepYOS"] >= 20]
+    bands = [("p10", "p90", 0.12), ("p25", "p75", 0.25)]
     for key, color, label in [
         ("h3_govt", H3_COLOR, "High-Three"),
         ("brs_govt", BRS_COLOR, "BRS"),
@@ -629,21 +631,22 @@ with ch1:
         if has_cliff:
             cu = cusp[key]
             xp = list(pre["SepYOS"]) + [20]
-            # Bands, extended to the value on the cusp of
-            # vesting at 20 (TSP only, no pension yet).
-            ax.fill_between(
-                xp,
-                list(pre[f"{key}_p10"] / 1000)
-                + [cu["p10"] / 1000],
-                list(pre[f"{key}_p90"] / 1000)
-                + [cu["p90"] / 1000],
-                alpha=0.15, color=color,
-            )
-            ax.fill_between(
-                post["SepYOS"], post[f"{key}_p10"] / 1000,
-                post[f"{key}_p90"] / 1000,
-                alpha=0.15, color=color,
-            )
+            # P10–P90 and P25–P75 bands, each extended to its
+            # value on the cusp of vesting at 20 (TSP only).
+            for lo, hi, a in bands:
+                ax.fill_between(
+                    xp,
+                    list(pre[f"{key}_{lo}"] / 1000)
+                    + [cu[lo] / 1000],
+                    list(pre[f"{key}_{hi}"] / 1000)
+                    + [cu[hi] / 1000],
+                    alpha=a, color=color,
+                )
+                ax.fill_between(
+                    post["SepYOS"], post[f"{key}_{lo}"] / 1000,
+                    post[f"{key}_{hi}"] / 1000,
+                    alpha=a, color=color,
+                )
             # Median: pre to the cusp (open marker = limit not
             # attained), dotted drop = the cliff, then 20+.
             ax.plot(
@@ -666,11 +669,12 @@ with ch1:
                 color=color, lw=2,
             )
         else:
-            ax.fill_between(
-                mcc["SepYOS"], mcc[f"{key}_p10"] / 1000,
-                mcc[f"{key}_p90"] / 1000,
-                alpha=0.15, color=color,
-            )
+            for lo, hi, a in bands:
+                ax.fill_between(
+                    mcc["SepYOS"], mcc[f"{key}_{lo}"] / 1000,
+                    mcc[f"{key}_{hi}"] / 1000,
+                    alpha=a, color=color,
+                )
             ax.plot(
                 mcc["SepYOS"], mcc[f"{key}_p50"] / 1000,
                 color=color, lw=2, label=label,
@@ -686,12 +690,24 @@ with ch1:
     ax.set_ylabel("Government-Funded Value (2026 $)")
     ax.set_title(
         "Government-Funded Value by System\n"
-        "(excludes your own 5% TSP — identical under both)"
+        "(excludes your TSP contribution — identical under both)"
     )
     ax.yaxis.set_major_formatter(
-        plt.FuncFormatter(lambda v, _: f"${v:,.0f}K")
+        plt.FuncFormatter(lambda v, _: f"${v / 1000:,.1f}M")
     )
-    ax.legend()
+    # Gray proxies explain the (per-system colored) bands.
+    sys_h, sys_l = ax.get_legend_handles_labels()
+    band_h = [
+        Patch(facecolor="0.5", alpha=0.30,
+              label="P10–P90 (80% of outcomes)"),
+        Patch(facecolor="0.5", alpha=0.60,
+              label="P25–P75 (50% of outcomes)"),
+    ]
+    ax.legend(
+        sys_h + band_h,
+        sys_l + [h.get_label() for h in band_h],
+        fontsize=8,
+    )
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     st.pyplot(fig)
