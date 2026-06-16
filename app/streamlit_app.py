@@ -50,59 +50,57 @@ def fmt_usd(x):
     return f"{sign}${abs(x):,.0f}"
 
 
-def theme():
-    """Theme-aware chart colors so figures blend into the app's
-    light or dark page. On dark, the few palette colors that would
-    vanish against the dark background (the navy BRS line and the
-    navy / dark-gold advantage labels) are lightened; maize and
-    profile colors carry over unchanged. Falls back to light.
+def advantage_phrase(x):
+    """A signed difference stated as a positive magnitude plus the
+    system it favors, so no minus signs ever reach the reader.
     """
-    try:
-        is_dark = st.context.theme.type == "dark"
-    except Exception:  # noqa: BLE001 — theme may be unavailable
-        is_dark = False
-    if is_dark:
-        return {
-            "dark": True,
-            "fg": "#fafafa",
-            "bg": "#0e1117",
-            "brs": "#7fb2e8",       # brightened Michigan blue
-            "brs_label": "#9bbfe0",
-            "h3_label": "#ddbb66",  # light gold
-            # Brightened profile colors so the difference fan
-            # pops against the dark page (the sage green and
-            # violet read dim at full saturation on dark).
-            "profiles": {
-                "Enlisted": "#F0843C",
-                "PriorEnlistedOfficer": "#93C7B2",
-                "Officer": "#8F89CE",
-            },
-        }
+    leader = "BRS" if x >= 0 else "High-Three"
+    return f"${abs(x):,.0f} in {leader}'s favor"
+
+
+def theme():
+    """Fixed chart palette: the notebook (light) colors on a solid
+    white figure background, applied regardless of the app's light
+    or dark mode. Each chart is a self-contained white panel, so it
+    renders identically and its titles/labels stay legible on either
+    page — instead of depending on runtime theme detection
+    (``st.context.theme.type``), which left text near-white on a
+    white page when the detected theme and the actual page
+    disagreed. Fills are near-opaque so the colors read vividly
+    rather than washing out; the single-series difference fan is the
+    most opaque, the two overlapping bands in the government chart
+    stay translucent enough to show where they cross.
+    """
     return {
-        "dark": False,
         "fg": "#262730",
         "bg": "#ffffff",
         "brs": BRS_COLOR,
         "brs_label": "#00274C",
         "h3_label": "#6b540f",
         "profiles": PROFILE_COLORS,
+        "h3_fill": H3_COLOR,
+        "band_a": 0.55,
+        "region_a": 0.18,
+        "diff_a": 0.85,
     }
 
 
 def theme_fg():
-    """Foreground (text/axes) color for the current app theme."""
+    """Foreground (text/axes) color for the charts."""
     return theme()["fg"]
 
 
 def apply_chart_theme(tc):
-    """Blend every matplotlib figure into the app theme via
-    rcParams: transparent backgrounds, foreground-colored text,
-    axes, ticks, grid, and a page-colored legend box.
+    """Give every matplotlib figure a solid white background with
+    dark text/axes/ticks/grid via rcParams, so each chart is a
+    self-contained panel that stays legible on a light or dark
+    page (rather than a transparent figure that inherits — and can
+    clash with — the page color).
     """
     plt.rcParams.update({
-        "figure.facecolor": "none",
-        "axes.facecolor": "none",
-        "savefig.facecolor": "none",
+        "figure.facecolor": tc["bg"],
+        "axes.facecolor": tc["bg"],
+        "savefig.facecolor": tc["bg"],
         "savefig.edgecolor": "none",
         "text.color": tc["fg"],
         "axes.labelcolor": tc["fg"],
@@ -139,7 +137,9 @@ HOW_IT_WORKS = (
     "but only if you reach 20 years. Leave at 19 and you "
     "get nothing. The **BRS** (everyone joining since 2018) "
     "pays a smaller pension (2.0% per year, same 20-year "
-    "rule) but adds money to your TSP that you keep no "
+    "rule) but adds money to your Thrift Savings Plan (TSP, "
+    "the military's 401(k)-style retirement account) that you "
+    "keep no "
     "matter when you leave: 1% of basic pay automatically, "
     "plus matching on your own contributions (full match at "
     "5%). This app asks: over a whole lifetime, which "
@@ -182,7 +182,8 @@ HOW_IT_WORKS = (
     "balance can be compared apples-to-apples.\n\n"
     "**Why your contribution is the same under both "
     "systems.** The slider sets *your* TSP contribution "
-    "identically under H3 and BRS. That's deliberate: your "
+    "identically under High-Three and BRS. That's deliberate: "
+    "your "
     "own savings would follow you either way, so holding it "
     "equal isolates what the *government* provides "
     "differently — the match and the pension multiplier. "
@@ -216,7 +217,7 @@ HOW_IT_WORKS = (
 ASSUMPTIONS = (
     "- **Reporting**: NPV at separation, constant 2026 "
     "dollars; framing is the neutral difference "
-    "(BRS − H3), not a recommendation.\n"
+    "(BRS − High-Three), not a recommendation.\n"
     "- **Deterministic path**: 2.75% COLA / pay growth "
     "(DoD actuarial), glide-path L Fund historical "
     "means, SSA 2022 male life expectancy.\n"
@@ -230,12 +231,11 @@ ASSUMPTIONS = (
     "glide path to age 60, then drawdown pricing at "
     "the discount rate.\n"
     "- **Market outlook**: a uniform ±2 pp shift of all "
-    "glide-path mean returns — the return component of "
-    "notebook 05's Bull/Bear regime stress (the notebook "
-    "scenarios additionally vary COLA and discount rate; "
-    "here the discount rate is its own Advanced control). "
-    "A separate construct from the Monte Carlo's "
-    "year-to-year variation.\n"
+    "glide-path mean returns — a sustained decades-long bull "
+    "or bear market regime (the full scenario analysis also "
+    "varies COLA and discount rate; here the discount rate is "
+    "its own Advanced control). A separate construct from the "
+    "Monte Carlo's year-to-year variation.\n"
     "- **Promotion timeline**: rank is asserted by you "
     "(or the typical table), not predicted; pay is "
     "priced from the 2026 DFAS table.\n"
@@ -354,7 +354,7 @@ entry_age = st.sidebar.number_input(
 )
 
 member_pct = st.sidebar.slider(
-    "Your TSP contribution (% of basic pay)",
+    "Your Thrift Savings Plan (TSP) contribution (% of basic pay)",
     min_value=0, max_value=10, value=5, step=1,
     help=(
         "Held equal under both systems to isolate the "
@@ -498,8 +498,10 @@ st.title("Beyond the Pension Cliff")
 st.caption(
     "Blended Retirement System (BRS) vs. legacy High-Three "
     "— lifetime value to you, and cost to the government. "
-    "All values are NPV at separation in constant 2026 "
-    "dollars. Positive difference = BRS yields more."
+    "Every figure is a net present value (NPV) at separation: "
+    "all future pension checks and savings are converted to a "
+    "single equivalent lump sum in today's money, stated in "
+    "constant 2026 dollars."
 )
 
 with st.expander("How this works — where these numbers come from"):
@@ -530,8 +532,6 @@ tc = theme()
 apply_chart_theme(tc)
 fg = tc["fg"]
 fig, ax = plt.subplots(figsize=(10, 0.9))
-fig.patch.set_alpha(0.0)  # blend with the app's page background
-ax.patch.set_alpha(0.0)
 for grade, start, end in runs:
     color = (
         "#F0C9A8"  # light Ross-orange tint (E grades)
@@ -592,39 +592,31 @@ left, right = st.columns(2)
 with left:
     st.subheader("Your ledger")
     adv = mc["brs_adv"]
+    med = adv["p50"]
+    leader = "BRS" if med >= 0 else "High-Three"
     st.metric(
-        "Lifetime value difference (BRS − H3), median",
-        fmt_usd(adv["p50"]),
+        f"Median lifetime advantage — {leader}",
+        f"${abs(med):,.0f}",
     )
     st.caption(esc_md(
-        f"Monte Carlo middle 50% of outcomes: "
-        f"{fmt_usd(adv['p25'])} to {fmt_usd(adv['p75'])} · mean "
-        f"{fmt_usd(adv['mean'])} · N={n_iter:,}"
+        f"Half of {n_iter:,} simulated futures land between "
+        f"{advantage_phrase(adv['p25'])} and "
+        f"{advantage_phrase(adv['p75'])}."
     ))
-    cm = mc["component_means"]
-    comp = pd.DataFrame(
-        {
-            "High-Three": [
-                cm["h3_pension"], cm["member_tsp"], 0.0,
-                cm["h3_total"],
-            ],
-            "BRS": [
-                cm["brs_pension"], cm["member_tsp"],
-                cm["govt_tsp"], cm["brs_total"],
-            ],
-        },
-        index=[
-            "Pension NPV",
-            "Member TSP PV",
-            "Govt TSP PV",
-            "Total",
-        ],
+    gov_value = pd.DataFrame(
+        {"Median value to you": [
+            mc["h3_govt"]["p50"], mc["brs_govt"]["p50"],
+        ]},
+        index=["High-Three", "BRS"],
     )
-    st.dataframe(comp.style.format(fmt_usd), width="stretch")
+    st.dataframe(
+        gov_value.style.format(fmt_usd), width="stretch"
+    )
     st.caption(
-        "Component values are Monte Carlo means (means add "
-        "up; medians don't). Member TSP is identical under "
-        "both systems by design."
+        "Government-funded value only: your pension plus any "
+        "government TSP contributions. Your own savings are "
+        "the same under both systems, so they don't change "
+        "the comparison."
     )
 
 with right:
@@ -636,16 +628,17 @@ with right:
     g2.metric(
         "Cost under BRS", fmt_usd(det["BRS_GovtCost"])
     )
+    sav = det["DoD_Savings"]
     g3.metric(
-        "DoD savings (H3 − BRS)",
-        fmt_usd(det["DoD_Savings"]),
+        "BRS saves the government" if sav >= 0
+        else "BRS costs the government extra",
+        f"${abs(sav):,.0f}",
     )
     st.caption(
-        "Deterministic actuarial basis (notebook 04): "
-        "pension NPV plus government TSP contributions "
-        "compounded at the discount rate. The market-outlook "
-        "setting doesn't move this side — DoD's cost is "
-        "valued at the discount rate, not market returns."
+        "What the government expects to pay for this career, "
+        "in today's dollars. The market-outlook setting "
+        "doesn't change these numbers — the government's cost "
+        "doesn't depend on how the investments perform."
     )
     st.markdown(esc_md(
         f"**Across the force** (typical "
@@ -679,7 +672,7 @@ with ch1:
     fig, ax = plt.subplots(figsize=(7, 4.2))
     pre = mcc[mcc["SepYOS"] < 20]
     post = mcc[mcc["SepYOS"] >= 20]
-    bands = [("p25", "p75", 0.22)]
+    bands = [("p25", "p75", tc["band_a"])]
     for key, color, label in [
         ("h3_govt", H3_COLOR, "High-Three"),
         ("brs_govt", tc["brs"], "BRS"),
@@ -691,6 +684,9 @@ with ch1:
              pe.Normal()]
             if key == "h3_govt" else None
         )
+        # Band fill uses the brighter maize on dark so it reads
+        # gold rather than olive; the line keeps the true maize.
+        fill = tc["h3_fill"] if key == "h3_govt" else color
         if has_cliff:
             cu = cusp[key]
             xp = list(pre["SepYOS"]) + [20]
@@ -703,12 +699,12 @@ with ch1:
                     + [cu[lo] / 1000],
                     list(pre[f"{key}_{hi}"] / 1000)
                     + [cu[hi] / 1000],
-                    alpha=a, color=color,
+                    alpha=a, color=fill,
                 )
                 ax.fill_between(
                     post["SepYOS"], post[f"{key}_{lo}"] / 1000,
                     post[f"{key}_{hi}"] / 1000,
-                    alpha=a, color=color,
+                    alpha=a, color=fill,
                 )
             # Median: pre to the cusp (open marker = limit not
             # attained), dotted drop = the cliff, then 20+.
@@ -737,7 +733,7 @@ with ch1:
                 ax.fill_between(
                     mcc["SepYOS"], mcc[f"{key}_{lo}"] / 1000,
                     mcc[f"{key}_{hi}"] / 1000,
-                    alpha=a, color=color,
+                    alpha=a, color=fill,
                 )
             ax.plot(
                 mcc["SepYOS"], mcc[f"{key}_p50"] / 1000,
@@ -778,6 +774,9 @@ with ch1:
 
 with ch2:
     pcolor = tc["profiles"][profile]
+    # The median sits on a near-opaque fill of the same profile
+    # color; a thin dark outline keeps the line readable on it.
+    med_pe = [pe.Stroke(linewidth=3.4, foreground=fg), pe.Normal()]
     fig, ax = plt.subplots(figsize=(7, 4.2))
     pre = mcc[mcc["SepYOS"] < 20]
     post = mcc[mcc["SepYOS"] >= 20]
@@ -792,13 +791,13 @@ with ch2:
             + [cu["p25"] / 1000],
             list(pre["brs_adv_p75"] / 1000)
             + [cu["p75"] / 1000],
-            alpha=0.38, color=pcolor,
+            alpha=tc["diff_a"], color=pcolor,
             label="Middle 50% of outcomes",
         )
         ax.fill_between(
             post["SepYOS"], post["brs_adv_p25"] / 1000,
             post["brs_adv_p75"] / 1000,
-            alpha=0.38, color=pcolor,
+            alpha=tc["diff_a"], color=pcolor,
         )
         # Median, broken at the cliff the same way.
         ax.plot(
@@ -806,6 +805,7 @@ with ch2:
             list(pre["brs_adv_p50"] / 1000)
             + [cu["p50"] / 1000],
             color=pcolor, lw=2, label="Median",
+            path_effects=med_pe,
         )
         vested = post["brs_adv_p50"].iloc[0] / 1000
         ax.plot(
@@ -818,7 +818,7 @@ with ch2:
         )
         ax.plot(
             post["SepYOS"], post["brs_adv_p50"] / 1000,
-            color=pcolor, lw=2,
+            color=pcolor, lw=2, path_effects=med_pe,
         )
         # Deterministic (03a), broken at the cliff too.
         dpre = curve[curve["SepYOS"] < 20]
@@ -839,12 +839,13 @@ with ch2:
         ax.fill_between(
             mcc["SepYOS"], mcc["brs_adv_p25"] / 1000,
             mcc["brs_adv_p75"] / 1000,
-            alpha=0.38, color=pcolor,
+            alpha=tc["diff_a"], color=pcolor,
             label="Middle 50% of outcomes",
         )
         ax.plot(
             mcc["SepYOS"], mcc["brs_adv_p50"] / 1000,
             color=pcolor, lw=2, label="Median",
+            path_effects=med_pe,
         )
         ax.plot(
             curve["SepYOS"], curve["BRSAdv"] / 1000,
@@ -869,8 +870,12 @@ with ch2:
     # All-positive magnitude axis; shade which system leads
     # (light blue = BRS advantage, light maize = High-Three).
     ymin, ymax = ax.get_ylim()
-    ax.axhspan(0, ymax, color=BRS_REGION, alpha=0.18, zorder=0)
-    ax.axhspan(ymin, 0, color=H3_REGION, alpha=0.18, zorder=0)
+    ax.axhspan(
+        0, ymax, color=BRS_REGION, alpha=tc["region_a"], zorder=0
+    )
+    ax.axhspan(
+        ymin, 0, color=H3_REGION, alpha=tc["region_a"], zorder=0
+    )
     ax.set_ylim(ymin, ymax)
     ax.text(
         0.03, 0.93, "BRS advantage", transform=ax.transAxes,

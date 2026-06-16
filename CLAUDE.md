@@ -340,24 +340,31 @@ repo root: `streamlit run app/streamlit_app.py`.
   so High-Three is \$0 below 20. (Earlier the app used a
   deliberately disjoint dimgray/crimson, signed axes, and plotted
   absolute member totals; superseded.)
-- **Theme-aware charts (dark mode).** Every app figure blends into
-  the Streamlit page via `apply_chart_theme(tc)`, which sets
-  matplotlib `rcParams` once per run: transparent figure/axes
-  backgrounds, foreground-colored text/ticks/spines/grid, and a
-  page-colored legend box. `theme()` reads `st.context.theme.type`
-  and returns the palette — on **light** it is the exact notebook
-  values; on **dark** it lightens only the colors that would vanish
-  against the dark page: BRS line → brighter blue `#7fb2e8`, the
-  advantage labels → light blue `#9bbfe0` / light gold `#ddbb66`,
-  and the profile colors used in the difference fan → brightened
-  (`#F0843C` / `#93C7B2` / `#8F89CE`) so the fans pop. The maize H3
-  line is unchanged (bright on either background; its navy outline
-  simply disappears on dark). Black accents — the deterministic
-  dash, the zero/your-YOS reference lines, the selected-point dot —
-  switch to `fg`, and open-marker fills use the page `bg`. Because
-  backgrounds are transparent, charts sit on whatever the real page
-  color is, not a hardcoded one. `theme_fg()` (rank strip) now
-  delegates to `theme()`.
+- **Fixed white chart panels (mode-independent).** Every app
+  figure is a self-contained white panel that renders identically
+  and stays legible whether the Streamlit page is light or dark.
+  `apply_chart_theme(tc)` sets matplotlib `rcParams` once per run:
+  solid white figure/axes backgrounds (`tc["bg"]`), dark
+  foreground-colored text/ticks/spines/grid (`tc["fg"]` =
+  `#262730`), and a white legend box. `theme()` returns a single
+  fixed palette — the exact notebook (light) values — regardless of
+  mode; it no longer reads `st.context.theme.type`. This replaced an
+  earlier transparent-background, theme-detecting design (lightened
+  BRS/profile colors + dark-page blend) that was both dull over the
+  dark page (the translucent maize fill went muddy-brown) and
+  buggy in light mode (detection could flip the text to near-white
+  on the white page, making titles/labels unreadable). Fills are now
+  near-opaque so colors read vividly on white: `diff_a = 0.85`
+  (single-series difference fan), `band_a = 0.55` (the two
+  overlapping government-value bands, kept translucent enough to show
+  where they cross), `region_a = 0.18` (subtle half-shading). The
+  maize H3 line keeps its navy outline; `h3_fill = H3_COLOR`
+  (`#FFCB05`). Accents — the deterministic dash, the zero/your-YOS
+  reference lines, the selected-point dot — use `fg`, and open-marker
+  fills use `bg` (white). `theme_fg()` (rank strip) delegates to
+  `theme()`. A white panel sits on the dark page in dark mode (a
+  deliberate legibility-over-blend tradeoff, user decision
+  2026-06-16).
 - Streamlit markdown treats `$...$` as LaTeX exactly like notebook
   markdown: every dollar amount rendered via `st.markdown` /
   `st.caption` must pass through the app's `esc_md` helper

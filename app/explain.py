@@ -10,7 +10,7 @@ Two-tier chain, so the explain button always works:
    the same numbers. Zero dependencies, works offline forever.
 
 Both tiers follow the project's framing rules: the neutral
-"lifetime value difference (BRS - H3)", constant 2026 dollars,
+"lifetime value difference (BRS - High-Three)", constant 2026 dollars,
 and no claim that either system is "better". The LLM is given
 every number it may cite and instructed never to invent figures.
 """
@@ -31,10 +31,13 @@ Rules:
 - Use ONLY the numbers provided. Never invent, recompute, or
   extrapolate figures.
 - Frame results as the neutral "lifetime value difference
-  (BRS minus High-Three)". Positive means BRS yields more over a
-  lifetime; negative means the legacy High-Three yields more.
-  Never call either system "better" — which one favors a member
-  depends on career length.
+  between BRS and High-Three". State every difference as a
+  positive dollar amount in favor of whichever system leads
+  (e.g. "about $30,000 in BRS's favor" or "in High-Three's
+  favor") — never write a negative or minus-signed difference.
+  A provided figure with a minus sign favors High-Three; one
+  without favors BRS. Never call either system "better" — which
+  one favors a member depends on career length.
 - All dollar figures are net present value at separation in
   constant 2026 dollars. Round to the nearest thousand when
   narrating.
@@ -87,7 +90,7 @@ systems.
 Pension status: {pension}.
 
 Member lifetime value (NPV at separation, constant 2026 $):
-- Difference (BRS - H3), median: {_fmt(adv['p50'])}
+- Difference (BRS - High-Three), median: {_fmt(adv['p50'])}
 - Difference, middle 50% (P25 to P75): \
 {_fmt(adv['p25'])} to {_fmt(adv['p75'])}
 - Components (Monte Carlo means):
@@ -103,7 +106,7 @@ BRS {_fmt(cm['brs_total'])}
 Government cost of this career (deterministic, actuarial basis):
 - Under High-Three: {_fmt(det['H3_GovtCost'])}
 - Under BRS: {_fmt(det['BRS_GovtCost'])}
-- DoD savings (H3 - BRS): {_fmt(det['DoD_Savings'])}
+- DoD savings (High-Three - BRS): {_fmt(det['DoD_Savings'])}
 
 Force-wide context ({profile_label} entrants, DoD actuarial \
 separation rates, typical careers):
@@ -178,8 +181,8 @@ def _explain_builtin(
             "government's automatic 1% and matching "
             "contributions add about "
             f"{_fmt_k(cm['govt_tsp'])} more. The median "
-            "lifetime value difference (BRS − H3) is "
-            f"{_fmt_k(med)} — {direction}."
+            "lifetime value difference (BRS − High-Three) is "
+            f"{_fmt_k(abs(med))} — {direction}."
         )
     else:
         p1 = (
@@ -193,8 +196,8 @@ def _explain_builtin(
             f"{_fmt_k(cm['brs_pension'])}), while BRS adds "
             f"about {_fmt_k(cm['govt_tsp'])} in government TSP "
             "contributions. Netting the two, the median "
-            "lifetime value difference (BRS − H3) is "
-            f"{_fmt_k(med)} — {direction}."
+            "lifetime value difference (BRS − High-Three) is "
+            f"{_fmt_k(abs(med))} — {direction}."
         )
 
     sav = det["DoD_Savings"]
