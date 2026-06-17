@@ -53,7 +53,7 @@ The project is implemented in Python using Jupyter Notebooks in VS Code.
 **Monte Carlo stochastic variables (all others held fixed within each scenario):**
 1. TSP investment returns (parameterized from TSP L Fund historical data)
 2. Inflation/COLA rates — one draw per iteration, held for the full career + retirement, so it represents **lifetime-average inflation**. Fit on rolling 30-year average CPI (mean ≈ 3.39%, std ≈ 1.27%; `fit_cola_stats(cpi, window=30)` on the full 1914+ history), used consistently in 03b/04/05; DoD Board of Actuaries long-term assumption (2.75%) is the deterministic baseline. Annual-inflation std (~3%) would overstate the uncertainty of a multi-decade average; overlapping-window autocorrelation makes the std estimate itself uncertain, which the nb05 OAT bounds (1.5%/5.0% ≈ historical range of 30-yr averages, 0.8%–5.4%) cover. The COLA draw also drives basic-pay growth and the 2026-$ deflator, so it is shared across all components within an iteration.
-3. Life expectancy (Normal around the SSA 2022 male expected total age conditional on separation age, std 13 yr; nb05 includes a female-table sensitivity at the Officer/20 anchor via `death_age_offset` — gender is intentionally not a full model dimension since a ~17.5%-female population blend moves the baseline < $6K)
+3. Life expectancy — age at death sampled from the **empirical SSA 2022 conditional age-at-death distribution** (left-skewed, mode in the mid-80s, table-bounded), not a symmetric Normal. The survivor curve `l_x` is reconstructed from the life-expectancy column via the life-table identity `l_{x+1}/l_x = (e(x)−0.5)/(e(x+1)+0.5)` anchored at the separation age; `conditional_death_pmf` / `sample_death_age` / `mean_death_age` in `src/monte_carlo.py`. The pmf mean recovers the table's `TotalAge` to <0.1 yr, so the conditional mean (and the deterministic path) is unchanged from the prior Normal model — only the shape/tails differ. `run_scenario(..., gender="Male"|"Female", death_age_offset=…)`: `gender` picks the table column; `death_age_offset` shifts the whole sampled curve in years (used for the nb05 ±10-yr life-expectancy OAT). nb05 includes a female-table sensitivity at the Officer/20 anchor via `gender="Female"` — gender is intentionally not a full model dimension since a ~17.5%-female population blend moves the baseline < $6K. (Switching from the prior Normal(mean, 13) to empirical sampling barely moves the headline — Officer/20 MC median shifted ≈ −$3.5K — since the mean is preserved; it corrects the tail shape and removes the unrealistic 120-yr clip.)
 
 **Results reported in:** net present value at separation, expressed in constant 2026 dollars
 
@@ -150,8 +150,8 @@ Scale individual results to DoD aggregate cost.
 - Government TSP cost measured on **actuarial basis**: PV of contributions compounded at the 5% discount rate (not TSP market returns), matching the reference date used for pension NPV. This avoids a 1.5–2.6× overstatement of DoD's fiscal cost.
 - Weight each YOS scenario by its DoD actuarial separation probability; sum to get expected government cost per entrant
 - Monte Carlo section adds stochastic COLA and life expectancy (N=20,000 iterations). COLA fit on rolling 30-year average CPI, matching 03b. COLA draws are shared across all scenarios per iteration; death age is independent per scenario. The COLA draw drives pay growth, so the High-Three base and `GovtTSP_PV` are stochastic too; all values deflated to 2026 dollars per iteration.
-- **Force-level aggregation rules** (2026-06-12): death-age luck is idiosyncratic and averages out across a 158K cohort, so force-level bands hold death age at its conditional mean (`sim_scenario_savings(..., death_std=0)`) and keep only the shared COLA risk; the cohort Total is the percentile of the per-iteration sum, not the sum of per-profile percentiles. Combined cohort savings ≈ +$3.6B/+$6.1B/+$9.4B p10/p50/p90 (det +$5.1B). Per-entrant views keep mortality stochastic (real risk for one member).
-- Convergence validated via 20K→40K half-to-full check: max shift 0.23% of P10-P90 spread (Officer per-entrant savings, most volatile metric) — PASS at 1% threshold
+- **Force-level aggregation rules** (2026-06-12): death-age luck is idiosyncratic and averages out across a 158K cohort, so force-level bands hold death age at its conditional mean (`sim_scenario_savings(..., death_stochastic=False)`, which uses `mean_death_age`) and keep only the shared COLA risk; the cohort Total is the percentile of the per-iteration sum, not the sum of per-profile percentiles. Combined cohort savings ≈ +$3.6B/+$6.1B/+$9.4B p10/p50/p90 (det +$5.1B). Per-entrant views keep mortality stochastic (real risk for one member).
+- Convergence validated via 20K→40K half-to-full check: max shift 0.55% of P10-P90 spread (Officer per-entrant savings, most volatile metric) — PASS at 1% threshold
 - Spending decomposition splits expected per-entrant cost by recipient group (≤19 vs 20+ YOS): under H3 100% of spending goes to the 20+ minority by construction; under BRS only ~1–4% reaches the <20 majority — savings come from paying retirees 12–14% less, not redistribution. Also prices the cliff in govt dollars (the 20th year adds ~$0.8–1.7M to the obligation). Caveat in-notebook: actuarial cost ≈ half the member-side value of the early-separatee TSP benefit.
 - Force-level scaling uses 18,000 officer + 140,000 enlisted annual accessions; PEOs are deliberately excluded there (they enter as enlisted accessions — a separate line would double-count)
 - Outputs `fiscal_results.csv` and `scenario_weights.csv`
@@ -165,8 +165,10 @@ Scale individual results to DoD aggregate cost.
   TSP contribution (0% / 10%, baseline 5%). The discarded "real pay growth"
   variable is intentionally not included.
 - Female life-table sensitivity at the Officer/20 anchor via
-  `death_age_offset` (+4.1 yr): median deepens ~20% toward H3, within the
-  ±10-yr OAT band; gender is deliberately not a full model dimension.
+  `gender="Female"` (samples the female conditional age-at-death
+  distribution directly, +4.1 yr mean life): median deepens ~21% toward H3
+  (≈ −$158K → −$192K), within the ±10-yr OAT band; gender is deliberately
+  not a full model dimension.
 - Scenario-based analysis (Base, Bull Market, Bear Market, Low Participation),
   3-panel profile plot with shared y-axis. Bull/Bear use a uniform ±2 pp
   market-regime return stress — a deliberately separate construct from the
@@ -175,7 +177,7 @@ Scale individual results to DoD aggregate cost.
   the same empirical basis as nb03b/nb04; nb03a's deterministic path uses
   the 2.75% actuarial assumption. This is an intentional
   empirical-vs-actuarial difference, not a discrepancy, and is why the
-  Officer/20 baseline is more negative here (≈ −$154K) than nb03a's
+  Officer/20 baseline is more negative here (≈ −$158K) than nb03a's
   deterministic ≈ −$110K.
 
 **Separation-distribution sensitivity (per-entrant only)**
@@ -299,6 +301,22 @@ repo root: `streamlit run app/streamlit_app.py`.
   18/18/22 via per-profile widget keys): flows through to the
   glide path, growth-to-60 window, and life-expectancy lookup.
   `run_scenario` always supported it; the app just exposes it.
+- **Expected-lifespan control** (`life_offset` slider, −15…+15 yr,
+  default 0): a relative re-centering of the member's sampled age at
+  death, passed as `death_age_offset` to `mc_curve`/`run_scenario`
+  (shifts every draw, preserving the empirical left-skewed shape) and
+  to `deterministic_curve`/`deterministic_values`. Framed as a
+  *relative* offset (not an absolute age) so it stays stable as the
+  separation slider moves and is exactly 0/identical-to-notebooks at
+  default. **Scoped to the member side only:** it moves the member
+  ledger, both fans' member bands, and the right-fan deterministic
+  overlay, but **not** the government ledger — `deterministic_values`
+  computes the government pension cost at the population-mean
+  `n_pens` (offset 0) and the member pension at `n_pens + offset`,
+  because DoD prices the cohort, not one member's longevity (same
+  principle as Market outlook not moving the government ledger). The
+  cusp (`mc_cusp`) is TSP-only and death-independent, so it takes no
+  offset.
 - **Custom promotion timelines:** the sidebar editor seeds from
   `promotion_timing.csv` pin-points; users can shift promotion years
   or delete rows ("top out at E-7"). Helpers live in
@@ -393,7 +411,7 @@ Keep these as importable .py modules, not inline in notebooks:
 - `pay_builder.py` — `lookup_pay`, `build_pay_series` (extracted from nb02 unchanged; nb02 imports them), plus app-facing timeline helpers `promotion_points`, `grades_from_points`, `pay_series_from_grades` ✓
 - `tsp_calcs.py` — `tsp_at_separation(pay, entry_age, means, rate)` where `rate` is a float or callable(yos), `tsp_grow_to_60`, `compute_fund_means`, `select_fund`, `brs_govt_rate`, `brs_total_rate`; exports `BRS_CONTRIB_RATE=0.10` and `H3_MEMBER_RATE=0.05` (steady-state) ✓
 - `utils.py` — `npv_pension`, `pv_lump_sum`, `percentile_summary` ✓
-- `monte_carlo.py` — `fit_fund_stats`, `fit_cola_stats`, `npv_pension_vec`, `grown_pay_matrix`, `high3_base_vec`, `govt_tsp_pv_vec`, `run_scenario(..., member_rate=0.05)` (outputs constant 2026 $; also returns the per-iteration input draws `cola`, `tsp_ret_mean`, `death_age` — no extra RNG calls, used by nb03b's tail-attribution section); exports `DEATH_AGE_STD=13.0` ✓
+- `monte_carlo.py` — `fit_fund_stats`, `fit_cola_stats`, `npv_pension_vec`, `grown_pay_matrix`, `high3_base_vec`, `govt_tsp_pv_vec`, `conditional_death_pmf`/`sample_death_age`/`mean_death_age` (empirical SSA conditional age-at-death; reconstruct the survivor curve from the life-expectancy column), `run_scenario(..., member_rate=0.05, gender="Male", death_age_offset=0.0)` (outputs constant 2026 $; samples death age empirically; also returns the per-iteration input draws `cola`, `tsp_ret_mean`, `death_age` — used by nb03b's tail-attribution section) ✓
 
 ---
 

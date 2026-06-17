@@ -21,12 +21,68 @@ from tsp_calcs import (
     select_fund,
 )
 
-# Std dev of age at death conditional on reaching the modeled
-# separation ages. Verified against the SSA 2022 male table by
-# recovering the survival curve from MaleLifeExpectancy
-# (S'/S = -(1 + e')/e): std is 13.5 yr at age 38, 12.9 at 42,
-# 12.6 at 44. 13.0 sits in that range.
-DEATH_AGE_STD = 13.0
+def conditional_death_pmf(life_exp_df, sep_age, gender="Male"):
+    """Conditional age-at-death distribution from the SSA table.
+
+    Age at death is left-skewed (mode in the 80s, a long tail
+    toward younger deaths), so a symmetric Normal misrepresents
+    the tails. Instead we sample from the actuarial table
+    directly. The needed survivor curve l_x is reconstructed from
+    the life-expectancy column already in the data via the
+    standard life-table identity (with L_x = (l_x + l_{x+1})/2):
+
+        l_{x+1} / l_x = (e(x) - 0.5) / (e(x+1) + 0.5)
+
+    anchored at l[sep_age] = 1. The conditional death mass is then
+    d(x) = l_x - l_{x+1}. Returns (ages, pmf) over integer ages
+    from sep_age to the table's terminal age. The pmf mean
+    (ages + 0.5) recovers the table's TotalAge to <0.1 yr, so the
+    conditional mean is unchanged from the prior model — only the
+    shape (now correctly skewed, table-bounded) differs.
+    """
+    ex = life_exp_df.set_index("Age")[f"{gender}LifeExpectancy"]
+    ages = [a for a in ex.index if a >= sep_age]
+    surv = np.empty(len(ages))
+    surv[0] = 1.0
+    for i, x in enumerate(ages[:-1]):
+        surv[i + 1] = surv[i] * (
+            (ex[x] - 0.5) / (ex[x + 1] + 0.5)
+        )
+    # Mass beyond the terminal age is zero, so the last bin's
+    # death share is simply its surviving fraction.
+    pmf = surv - np.append(surv[1:], 0.0)
+    return np.asarray(ages, dtype=float), pmf / pmf.sum()
+
+
+def sample_death_age(
+    life_exp_df, sep_age, n_iter, rng,
+    gender="Male", offset=0.0,
+):
+    """Draw n_iter continuous death ages from the empirical
+    conditional pmf: an integer age bin plus a uniform
+    within-year offset. `offset` shifts the whole curve in years
+    (life-expectancy / gender sensitivity), preserving the shape.
+    """
+    ages, pmf = conditional_death_pmf(
+        life_exp_df, sep_age, gender
+    )
+    idx = rng.choice(len(ages), size=n_iter, p=pmf)
+    return ages[idx] + rng.random(n_iter) + offset
+
+
+def mean_death_age(
+    life_exp_df, sep_age, gender="Male", offset=0.0,
+):
+    """Conditional mean age at death = the table's TotalAge
+    column (equal to the empirical pmf mean). Use where death age
+    is held at its expectation rather than sampled (e.g. nb04's
+    force-level bands)."""
+    col = f"{gender}TotalAge"
+    return float(
+        life_exp_df.loc[
+            life_exp_df["Age"] == sep_age, col
+        ].squeeze()
+    ) + offset
 
 
 def fit_fund_stats(tsp_df):
@@ -212,6 +268,7 @@ def run_scenario(
     seed=None,
     death_age_offset=0.0,
     member_rate=MEMBER_RATE,
+    gender="Male",
 ):
     """
     Run Monte Carlo simulation for one (profile, sep_yos).
@@ -235,9 +292,13 @@ def run_scenario(
     n_iter            : int   iterations (default 10,000)
     discount_rate     : float (default 0.05)
     seed              : int or None
-    death_age_offset  : float  added to SSA mean death age;
-                               use for life-expectancy
-                               sensitivity (default 0.0)
+    death_age_offset  : float  years added to every sampled
+                               death age; use for
+                               life-expectancy sensitivity
+                               (default 0.0)
+    gender            : str   "Male" or "Female" SSA table for
+                               the death-age draw (default
+                               "Male")
     member_rate       : float  member TSP contribution rate
                                under both systems (default
                                0.05). BRS adds the government
@@ -319,14 +380,9 @@ def run_scenario(
         h3_ann = annual_pension_high3(h3_base, sep_yos)
         brs_ann = annual_pension_brs(h3_base, sep_yos)
 
-        mean_death = float(
-            life_exp_df.loc[
-                life_exp_df["Age"] == sep_age,
-                "MaleTotalAge",
-            ].squeeze()
-        ) + death_age_offset
-        death_age = rng.normal(
-            mean_death, DEATH_AGE_STD, n_iter
+        death_age = sample_death_age(
+            life_exp_df, sep_age, n_iter, rng,
+            gender=gender, offset=death_age_offset,
         )
         death_age = np.clip(
             death_age, float(sep_age), 120.0

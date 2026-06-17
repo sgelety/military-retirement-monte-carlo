@@ -38,6 +38,12 @@ PROFILE_COLORS = {
     "Officer": "#575294",
 }
 
+# Monte Carlo iterations — fixed at the value validated for
+# convergence in notebook 03b (20K->40K shift < 1% of the
+# P10-P90 spread). Not user-adjustable: the only effect of a
+# lower count is noisier bands, with no benefit to the reader.
+N_ITER = 20_000
+
 st.set_page_config(
     page_title="BRS vs. High-Three Explorer",
     layout="wide",
@@ -167,7 +173,9 @@ HOW_IT_WORKS = (
     "- **Lifespan** is drawn from the Social Security "
     "Administration's actuarial tables, given your age at "
     "separation — because a pension's value depends "
-    "enormously on how many years it actually pays.\n\n"
+    "enormously on how many years it actually pays. If you "
+    "have a personal view, the *expected lifespan* control "
+    "shifts your simulated longevity up or down.\n\n"
     "The chart line and the shaded band show the spread "
     "across those 20,000 futures: the median is the middle "
     "outcome, and the band holds the middle 50% — half of "
@@ -224,7 +232,9 @@ ASSUMPTIONS = (
     "- **Monte Carlo**: stochastic TSP returns "
     "(glide-path L Fund distributions), lifetime-"
     "average COLA (rolling 30-yr CPI fit), and age at "
-    "death (SSA 2022 male, ±13 yr).\n"
+    "death sampled from the SSA 2022 male actuarial "
+    "table — its own left-skewed, table-bounded shape, "
+    "not a symmetric bell curve.\n"
     "- **TSP**: member contributes the same rate under "
     "both systems; BRS adds 1% automatic plus up to 4% "
     "match (from YOS 3). Returns follow the L Fund "
@@ -236,6 +246,12 @@ ASSUMPTIONS = (
     "varies COLA and discount rate; here the discount rate is "
     "its own Advanced control). A separate construct from the "
     "Monte Carlo's year-to-year variation.\n"
+    "- **Expected lifespan**: re-centers your sampled age at "
+    "death by the chosen number of years (0 = the SSA average "
+    "for your age), keeping the distribution's shape and "
+    "spread. It moves only your personal value — the "
+    "government's actuarial cost stays priced on the cohort "
+    "average.\n"
     "- **Promotion timeline**: rank is asserted by you "
     "(or the typical table), not predicted; pay is "
     "priced from the 2026 DFAS table.\n"
@@ -261,7 +277,7 @@ def get_inputs():
 
 @st.cache_data
 def cached_curve(profile, points, max_yos, entry_age,
-                 member_rate, disc, outlook):
+                 member_rate, disc, outlook, life_offset):
     inputs = get_inputs()
     pay, _ = sc.pay_from_points(
         list(points), max_yos, inputs["basic_pay"]
@@ -272,13 +288,14 @@ def cached_curve(profile, points, max_yos, entry_age,
     return sc.deterministic_curve(
         pay, entry_age, inputs["life_exp"],
         means, member_rate, disc,
+        death_age_offset=life_offset,
     )
 
 
 @st.cache_data
 def cached_mc_curve(
     profile, points, max_yos, entry_age, member_rate, disc,
-    n_iter, outlook,
+    outlook, life_offset,
 ):
     inputs = get_inputs()
     pay, _ = sc.pay_from_points(
@@ -290,14 +307,15 @@ def cached_mc_curve(
     return sc.mc_curve(
         profile, pay, entry_age,
         inputs["life_exp"], stats, inputs["cola_stats"],
-        member_rate, disc, n_iter=n_iter,
+        member_rate, disc, n_iter=N_ITER,
+        death_age_offset=life_offset,
     )
 
 
 @st.cache_data
 def cached_mc_cusp(
     profile, points, max_yos, entry_age, member_rate, disc,
-    n_iter, outlook,
+    outlook,
 ):
     inputs = get_inputs()
     pay, _ = sc.pay_from_points(
@@ -309,7 +327,7 @@ def cached_mc_cusp(
     return sc.mc_cusp(
         profile, pay, entry_age,
         inputs["life_exp"], stats, inputs["cola_stats"],
-        member_rate, disc, n_iter=n_iter,
+        member_rate, disc, n_iter=N_ITER,
     )
 
 
@@ -328,15 +346,7 @@ profile = st.sidebar.radio(
 )
 max_yos = sc.PROFILE_MAX_YOS[profile]
 
-sep_yos = st.sidebar.slider(
-    "Years of service at separation",
-    min_value=sc.MIN_SEP_YOS,
-    max_value=max_yos,
-    value=min(20, max_yos),
-    step=1,
-)
-
-entry_age = st.sidebar.number_input(
+entry_age = st.sidebar.slider(
     "Age when you entered service",
     min_value=17, max_value=40,
     value=sc.ENTRY_AGE[profile],
@@ -350,38 +360,6 @@ entry_age = st.sidebar.number_input(
         "lookup behind the pension value. For prior-enlisted "
         "officers this is the age you enlisted — "
         "commissioning happens at the timeline's YOS."
-    ),
-)
-
-member_pct = st.sidebar.slider(
-    "Your Thrift Savings Plan (TSP) contribution (% of basic pay)",
-    min_value=0, max_value=10, value=5, step=1,
-    help=(
-        "Held equal under both systems to isolate the "
-        "government-funded difference. BRS adds a 1% "
-        "automatic government contribution from entry, plus "
-        "matching from year 3: dollar-for-dollar on your "
-        "first 3%, then 50 cents per dollar on the next 2% "
-        "— the full 4% match (5% total government) requires "
-        "contributing at least 5%."
-    ),
-)
-member_rate = member_pct / 100.0
-
-outlook = st.sidebar.radio(
-    "Market outlook",
-    list(sc.REGIME_SHIFTS),
-    index=1,
-    help=(
-        "Shifts the average TSP return 2 percentage points "
-        "below or above its long-run history — sustained for "
-        "your entire career. This is the return stress from "
-        "the analysis's Bear/Bull scenarios (which also vary "
-        "inflation and discount rate; here only returns "
-        "move). The simulation still varies year-to-year "
-        "luck around that average. The government ledger "
-        "doesn't move: DoD's cost is valued at the discount "
-        "rate, not market returns."
     ),
 )
 
@@ -421,17 +399,109 @@ with st.sidebar.expander("Adjust my promotion timeline"):
         },
     )
 
+sep_yos = st.sidebar.slider(
+    "Years of service at separation",
+    min_value=sc.MIN_SEP_YOS,
+    max_value=max_yos,
+    value=min(20, max_yos),
+    step=1,
+    help=(
+        "The year you leave service. 20 years is the pension "
+        "cliff: reach it and you vest a lifetime pension under "
+        "both systems; leave before 20 and High-Three pays no "
+        "retirement at all, while BRS still leaves you the "
+        "government's TSP contributions."
+    ),
+)
+
+life_offset = st.sidebar.slider(
+    "Expected lifespan vs. average (years)",
+    min_value=-15, max_value=15, value=0, step=1,
+    help=(
+        "0 keeps the SSA 2022 average lifespan for someone "
+        "your age. Move right if you expect to live longer "
+        "than average (+5 = about five years beyond), left if "
+        "shorter. This re-centers your simulated lifespan while "
+        "keeping the realistic spread and shape. A longer life "
+        "favors High-Three (its larger pension keeps paying); a "
+        "shorter life favors BRS (you keep the TSP regardless). "
+        "It changes only your personal value — the government's "
+        "actuarial cost is priced on the whole cohort, not your "
+        "own longevity, so the government ledger doesn't move."
+    ),
+)
+
+_life_mean = round(float(
+    inputs["life_exp"].loc[
+        inputs["life_exp"]["Age"] == entry_age + sep_yos,
+        "MaleTotalAge",
+    ].squeeze()
+))
+if life_offset:
+    st.sidebar.caption(
+        f"Expected lifespan: age {_life_mean} → adjusted: "
+        f"age {_life_mean + life_offset}. That's the *average* "
+        "— each simulated future still draws its own lifespan, "
+        "spread years above and below it, so nothing is pinned "
+        "to one exact age."
+    )
+else:
+    st.sidebar.caption(
+        f"Expected lifespan: age {_life_mean} (SSA average for "
+        "your age). Each simulated future still draws its own "
+        "lifespan, spread years above and below this."
+    )
+
+member_pct = st.sidebar.slider(
+    "Your Thrift Savings Plan (TSP) contribution (% of basic pay)",
+    min_value=0, max_value=10, value=5, step=1,
+    help=(
+        "Held equal under both systems to isolate the "
+        "government-funded difference. BRS adds a 1% "
+        "automatic government contribution from entry, plus "
+        "matching from year 3: dollar-for-dollar on your "
+        "first 3%, then 50 cents per dollar on the next 2% "
+        "— the full 4% match (5% total government) requires "
+        "contributing at least 5%."
+    ),
+)
+member_rate = member_pct / 100.0
+
+outlook = st.sidebar.radio(
+    "Market outlook",
+    list(sc.REGIME_SHIFTS),
+    index=1,
+    help=(
+        "Shifts the average TSP return 2 percentage points "
+        "below or above its long-run history — sustained for "
+        "your entire career. This is the return stress from "
+        "the analysis's Bear/Bull scenarios (which also vary "
+        "inflation and discount rate; here only returns "
+        "move). The simulation still varies year-to-year "
+        "luck around that average. The government ledger "
+        "doesn't move: DoD's cost is valued at the discount "
+        "rate, not market returns."
+    ),
+)
+
 with st.sidebar.expander("Advanced"):
     disc_pct = st.slider(
         "Discount rate (%)",
         min_value=3.0, max_value=7.0, value=5.0, step=0.5,
+        help=(
+            "How much future dollars are worth today. A "
+            "pension paid 30 years from now is worth less to "
+            "you than the same amount today, and this rate "
+            "sets how much less when adding up a lifetime of "
+            "payments. A higher rate discounts the far-off "
+            "pension more heavily, which favors BRS's earlier "
+            "TSP money; a lower rate favors the High-Three "
+            "pension. The 5% default matches the project's "
+            "notebooks; it does not change the government "
+            "ledger, which is figured on an actuarial basis."
+        ),
     )
     disc = disc_pct / 100.0
-    n_iter = st.select_slider(
-        "Monte Carlo iterations",
-        options=[5_000, 20_000],
-        value=20_000,
-    )
 
 # ----------------------------------------------------------
 # Build the pay series from the (possibly edited) timeline
@@ -463,11 +533,11 @@ timing_label = (
 
 curve = cached_curve(
     profile, points_key, max_yos, entry_age, member_rate,
-    disc, outlook,
+    disc, outlook, life_offset,
 )
 mcc = cached_mc_curve(
     profile, points_key, max_yos, entry_age, member_rate,
-    disc, n_iter, outlook,
+    disc, outlook, life_offset,
 )
 mc = sc.mc_from_curve_row(
     mcc.set_index("SepYOS").loc[sep_yos]
@@ -482,7 +552,7 @@ has_cliff = career_max >= 20
 cusp = (
     cached_mc_cusp(
         profile, points_key, max_yos, entry_age, member_rate,
-        disc, n_iter, outlook,
+        disc, outlook,
     )
     if has_cliff
     else None
@@ -599,14 +669,22 @@ with left:
         f"${abs(med):,.0f}",
     )
     st.caption(esc_md(
-        f"Half of {n_iter:,} simulated futures land between "
+        f"Half of {N_ITER:,} simulated futures land between "
         f"{advantage_phrase(adv['p25'])} and "
         f"{advantage_phrase(adv['p75'])}."
     ))
     gov_value = pd.DataFrame(
-        {"Median value to you": [
-            mc["h3_govt"]["p50"], mc["brs_govt"]["p50"],
-        ]},
+        {
+            "First Year's Pension (in 2026 dollars)": [
+                det["H3PensionAnnual"], det["BRSPensionAnnual"],
+            ],
+            "Govt. TSP at separation": [
+                0.0, det["GovtTSP_AtSep"],
+            ],
+            "Median Lifetime Value": [
+                mc["h3_govt"]["p50"], mc["brs_govt"]["p50"],
+            ],
+        },
         index=["High-Three", "BRS"],
     )
     st.dataframe(
@@ -616,8 +694,26 @@ with left:
         "Government-funded value only: your pension plus any "
         "government TSP contributions. Your own savings are "
         "the same under both systems, so they don't change "
-        "the comparison."
+        "the comparison. Annual pension is the first-year "
+        "amount and the government TSP balance is taken at "
+        "separation; both are center-path estimates in "
+        "today's dollars."
     )
+    if life_offset:
+        life_mean = float(
+            inputs["life_exp"].loc[
+                inputs["life_exp"]["Age"] == sep_age,
+                "MaleTotalAge",
+            ].squeeze()
+        )
+        st.caption(
+            f"Life expectancy set to {life_offset:+d} yr vs. "
+            f"average — about age "
+            f"{life_mean + life_offset:.0f} at this separation "
+            f"(SSA average ≈ {life_mean:.0f}). This moves only "
+            "your value; the government ledger stays at the "
+            "cohort average."
+        )
 
 with right:
     st.subheader("Government ledger")
@@ -660,10 +756,14 @@ with right:
 # Charts
 # ----------------------------------------------------------
 st.subheader("Where your career sits on the cliff")
+life_note = (
+    f" Expected lifespan: {life_offset:+d} yr vs. average."
+    if life_offset else ""
+)
 st.caption(
-    f"Market outlook: {outlook}. Lines are Monte Carlo "
-    "medians across every possible separation year; the "
-    f"shaded band is the middle 50% of {n_iter:,} simulated "
+    f"Market outlook: {outlook}.{life_note} Lines are Monte "
+    "Carlo medians across every possible separation year; the "
+    f"shaded band is the middle 50% of {N_ITER:,} simulated "
     "futures."
 )
 ch1, ch2 = st.columns(2)

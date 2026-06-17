@@ -158,12 +158,20 @@ def deterministic_values(
     member_rate=0.05,
     discount_rate=DISCOUNT_RATE,
     cola_rate=COLA_RATE,
+    death_age_offset=0.0,
 ):
     """
     Deterministic lifetime + government values for one point.
 
     Mirrors notebook 03a's calc_lifetime (member side) and
     notebook 04's actuarial government cost. Constant 2026 $.
+
+    `death_age_offset` shifts the *member's* pension years by
+    that many years (the app's life-expectancy control) while
+    the government's actuarial pension cost stays at the
+    population mean — the government prices the cohort, not one
+    member's personal longevity. 0.0 (the notebook default)
+    makes the two coincide.
     """
     sep_age = entry_age + sep_yos
     pay = pay_full.loc[:sep_yos]
@@ -176,41 +184,55 @@ def deterministic_values(
     life_row = life_exp.loc[
         life_exp["Age"] == sep_age
     ].squeeze()
+    # Government cost uses population-mean pension years; the
+    # member's own value uses their life-expectancy offset.
     n_pens = life_row["MaleTotalAge"] - sep_age
+    n_pens_mem = max(0.0, n_pens + death_age_offset)
 
     gap = max(0, 60 - sep_age)
+    # TSP balances at the separation date (nominal); the
+    # government-funded portion is the BRS-minus-member gap.
+    brs_bal_sep = tsp_at_separation(
+        pay_nom, entry_age, fund_means,
+        _brs_rate_fn(member_rate),
+    )
+    h3_bal_sep = tsp_at_separation(
+        pay_nom, entry_age, fund_means, member_rate,
+    )
+    govt_tsp_at_sep = (brs_bal_sep - h3_bal_sep) / defl
     tsp_pv_brs = pv_lump_sum(
-        tsp_grow_to_60(
-            tsp_at_separation(
-                pay_nom, entry_age, fund_means,
-                _brs_rate_fn(member_rate),
-            ),
-            sep_age, fund_means,
-        ),
+        tsp_grow_to_60(brs_bal_sep, sep_age, fund_means),
         gap, discount_rate,
     ) / defl
     tsp_pv_h3 = pv_lump_sum(
-        tsp_grow_to_60(
-            tsp_at_separation(
-                pay_nom, entry_age, fund_means,
-                member_rate,
-            ),
-            sep_age, fund_means,
-        ),
+        tsp_grow_to_60(h3_bal_sep, sep_age, fund_means),
         gap, discount_rate,
     ) / defl
 
     if sep_yos >= 20:
-        h3_npv = npv_pension(
-            annual_pension_high3(h3_base, sep_yos),
-            cola_rate, discount_rate, n_pens,
+        h3_annual = annual_pension_high3(h3_base, sep_yos)
+        brs_annual = annual_pension_brs(h3_base, sep_yos)
+        # Government (actuarial) pension cost — population mean.
+        h3_npv_g = npv_pension(
+            h3_annual, cola_rate, discount_rate, n_pens,
         ) / defl
-        brs_npv = npv_pension(
-            annual_pension_brs(h3_base, sep_yos),
-            cola_rate, discount_rate, n_pens,
+        brs_npv_g = npv_pension(
+            brs_annual, cola_rate, discount_rate, n_pens,
         ) / defl
+        # Member pension value — shifted by the user's life
+        # expectancy (identical to the govt figure at offset 0).
+        if death_age_offset:
+            h3_npv_m = npv_pension(
+                h3_annual, cola_rate, discount_rate, n_pens_mem,
+            ) / defl
+            brs_npv_m = npv_pension(
+                brs_annual, cola_rate, discount_rate, n_pens_mem,
+            ) / defl
+        else:
+            h3_npv_m, brs_npv_m = h3_npv_g, brs_npv_g
     else:
-        h3_npv = brs_npv = 0.0
+        h3_annual = brs_annual = 0.0
+        h3_npv_g = brs_npv_g = h3_npv_m = brs_npv_m = 0.0
 
     govt_tsp_pv = float(
         govt_tsp_pv_vec(
@@ -219,22 +241,25 @@ def deterministic_values(
         )[0]
     ) / defl
 
-    h3_total = h3_npv + tsp_pv_h3
-    brs_total = brs_npv + tsp_pv_brs
+    h3_total = h3_npv_m + tsp_pv_h3
+    brs_total = brs_npv_m + tsp_pv_brs
     return {
         "SepYOS": sep_yos,
         "SepAge": sep_age,
-        "H3PensionNPV": h3_npv,
-        "BRSPensionNPV": brs_npv,
+        "H3PensionNPV": h3_npv_m,
+        "BRSPensionNPV": brs_npv_m,
+        "H3PensionAnnual": h3_annual / defl,
+        "BRSPensionAnnual": brs_annual / defl,
+        "GovtTSP_AtSep": govt_tsp_at_sep,
         "H3TSP_PV": tsp_pv_h3,
         "BRS_TSP_PV": tsp_pv_brs,
         "H3Total": h3_total,
         "BRSTotal": brs_total,
         "BRSAdv": brs_total - h3_total,
-        "H3_GovtCost": h3_npv,
+        "H3_GovtCost": h3_npv_g,
         "GovtTSP_PV": govt_tsp_pv,
-        "BRS_GovtCost": brs_npv + govt_tsp_pv,
-        "DoD_Savings": h3_npv - (brs_npv + govt_tsp_pv),
+        "BRS_GovtCost": brs_npv_g + govt_tsp_pv,
+        "DoD_Savings": h3_npv_g - (brs_npv_g + govt_tsp_pv),
     }
 
 
@@ -245,6 +270,7 @@ def deterministic_curve(
     fund_means,
     member_rate=0.05,
     discount_rate=DISCOUNT_RATE,
+    death_age_offset=0.0,
 ):
     """
     Deterministic values at every separation YOS.
@@ -256,6 +282,7 @@ def deterministic_curve(
         deterministic_values(
             pay_full, entry_age, sep_yos, life_exp,
             fund_means, member_rate, discount_rate,
+            death_age_offset=death_age_offset,
         )
         for sep_yos in range(
             MIN_SEP_YOS, int(pay_full.index.max()) + 1
@@ -302,6 +329,7 @@ def mc_curve(
     discount_rate=DISCOUNT_RATE,
     n_iter=20_000,
     seed=SEED,
+    death_age_offset=0.0,
 ):
     """
     Monte Carlo at every separation YOS on a pay series.
@@ -310,6 +338,10 @@ def mc_curve(
     curve is stable as sliders move). Returns a DataFrame
     with percentile columns for brs_adv / h3_total /
     brs_total plus additive component means per row.
+
+    `death_age_offset` shifts every sampled death age by that
+    many years (the app's life-expectancy control), re-centering
+    the member's lifespan while keeping the empirical spread.
     """
     pay_df = pd.DataFrame(
         {
@@ -334,6 +366,7 @@ def mc_curve(
             discount_rate=discount_rate,
             seed=seed + sep_yos,
             member_rate=member_rate,
+            death_age_offset=death_age_offset,
         )
         row = {"SepYOS": sep_yos}
         for key in _MC_KEYS:
