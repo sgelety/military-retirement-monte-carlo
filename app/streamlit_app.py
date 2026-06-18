@@ -559,11 +559,20 @@ drow20 = (
 st.title("Beyond the Pension Cliff")
 st.caption(
     "Blended Retirement System (BRS) vs. legacy High-Three "
-    "— lifetime value to you, and cost to the government. "
-    "Every figure is a net present value (NPV) at separation: "
-    "all future pension checks and savings are converted to a "
-    "single equivalent lump sum in today's money, stated in "
-    "constant 2026 dollars."
+    "— the government-funded value you'd receive, and the "
+    "cost to the government. Every figure is a net present "
+    "value (NPV) at separation: all future pension checks and "
+    "government TSP contributions are converted to a single "
+    "equivalent lump sum in today's money, stated in constant "
+    "2026 dollars."
+)
+st.info(
+    "**For education and illustration only — not financial, "
+    "tax, or retirement advice.** It models typical careers "
+    "with simplifying assumptions and cannot reflect your full "
+    "situation. Consult a personal financial counselor or "
+    "qualified advisor before making any retirement decision.",
+    icon="⚠️",
 )
 
 with st.expander("How this works — where these numbers come from"):
