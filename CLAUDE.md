@@ -342,6 +342,29 @@ repo root: `streamlit run app/streamlit_app.py`.
   chosen so a public deployment never has a dead or billing-risky
   feature. The Anthropic API is deliberately not used (user
   decision: no paid key; Gemini free tier + built-in fallback).
+  Both tiers narrate **only numbers shown on screen**, all on the
+  member's **median** basis — the median lifetime values, first-year
+  pensions, and the government-TSP-at-separation balance — and state
+  the member difference as the typical gap for the *same simulated
+  career*, never the subtraction of the two median totals (medians
+  don't add). The earlier mean component breakdown (member's own TSP,
+  mean pension/TSP NPVs, `component_means`) was removed 2026-06-17 as
+  it cited figures the tables don't show; `mc_from_curve_row`/
+  `mc_curve` no longer emit it.
+- **Ledger presentation (2026-06-17).** The member ledger table is
+  three government-funded columns — first-year pension, govt TSP at
+  separation, median lifetime value (a "Total Pension Value" center-
+  path column and a "Middle 50%" range were tried and removed: the
+  former duplicated the median total on a clashing basis, the latter
+  duplicates the fan-chart spread). A units footnote ("today's (2026)
+  dollars") sits directly under the table; one consolidated caption
+  carries the rest. Both ledger captions frame the **government** cost
+  as the actuarial **average-member** basis, so it won't match the
+  member's simulated medians (same principle that keeps the govt
+  ledger off the member-side life-expectancy/outlook controls). The
+  left-fan legend labels the two system lines "BRS Median" /
+  "High-Three Median", and the force-context bullets name the profile
+  ("enlisted entrants") rather than bare "entrants".
 - System colors in the app match the notebooks: H3 Michigan maize
   `#FFCB05`, BRS Michigan blue `#00274C` (with `BRS_REGION` light
   blue `#4B6C8F` / `H3_REGION` light maize `#FFE57F` for the

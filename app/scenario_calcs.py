@@ -385,19 +385,6 @@ def mc_curve(
             summ = percentile_summary(vec)
             for p in _PCTS:
                 row[f"{name}_{p}"] = summ[p]
-        # Means are additive across components; medians aren't.
-        row["h3_pension_mean"] = float(
-            res["h3_pension_npv"].mean()
-        )
-        row["brs_pension_mean"] = float(
-            res["brs_pension_npv"].mean()
-        )
-        row["member_tsp_mean"] = float(
-            res["h3_tsp_pv"].mean()
-        )
-        row["govt_tsp_mean"] = float(
-            (res["brs_tsp_pv"] - res["h3_tsp_pv"]).mean()
-        )
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -453,14 +440,6 @@ def mc_from_curve_row(row):
         out[key] = {
             p: float(row[f"{key}_{p}"]) for p in _PCTS
         }
-    out["component_means"] = {
-        "h3_pension": float(row["h3_pension_mean"]),
-        "brs_pension": float(row["brs_pension_mean"]),
-        "member_tsp": float(row["member_tsp_mean"]),
-        "govt_tsp": float(row["govt_tsp_mean"]),
-        "h3_total": float(row["h3_total_mean"]),
-        "brs_total": float(row["brs_total_mean"]),
-    }
     return out
 
 

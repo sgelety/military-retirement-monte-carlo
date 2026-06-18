@@ -56,14 +56,6 @@ def fmt_usd(x):
     return f"{sign}${abs(x):,.0f}"
 
 
-def advantage_phrase(x):
-    """A signed difference stated as a positive magnitude plus the
-    system it favors, so no minus signs ever reach the reader.
-    """
-    leader = "BRS" if x >= 0 else "High-Three"
-    return f"${abs(x):,.0f} in {leader}'s favor"
-
-
 def theme():
     """Fixed chart palette: the notebook (light) colors on a solid
     white figure background, applied regardless of the app's light
@@ -668,14 +660,9 @@ with left:
         f"Median lifetime advantage — {leader}",
         f"${abs(med):,.0f}",
     )
-    st.caption(esc_md(
-        f"Half of {N_ITER:,} simulated futures land between "
-        f"{advantage_phrase(adv['p25'])} and "
-        f"{advantage_phrase(adv['p75'])}."
-    ))
     gov_value = pd.DataFrame(
         {
-            "First Year's Pension (in 2026 dollars)": [
+            "First Year's Pension": [
                 det["H3PensionAnnual"], det["BRSPensionAnnual"],
             ],
             "Govt. TSP at separation": [
@@ -690,14 +677,16 @@ with left:
     st.dataframe(
         gov_value.style.format(fmt_usd), width="stretch"
     )
+    st.caption("All amounts are in today's (2026) dollars.")
     st.caption(
-        "Government-funded value only: your pension plus any "
-        "government TSP contributions. Your own savings are "
-        "the same under both systems, so they don't change "
-        "the comparison. Annual pension is the first-year "
-        "amount and the government TSP balance is taken at "
-        "separation; both are center-path estimates in "
-        "today's dollars."
+        "Government-funded value only (your pension plus any "
+        "government TSP) — your own contributions are "
+        "identical under both systems and cancel out. "
+        "Lifetime value is the typical result across "
+        f"{N_ITER:,} simulated futures; pension and TSP are "
+        "shown as of separation. The advantage above is "
+        "figured future-by-future, so it won't exactly match "
+        "the difference between the two lifetime values."
     )
     if life_offset:
         life_mean = float(
@@ -732,21 +721,24 @@ with right:
     )
     st.caption(
         "What the government expects to pay for this career, "
-        "in today's dollars. The market-outlook setting "
-        "doesn't change these numbers — the government's cost "
-        "doesn't depend on how the investments perform."
+        "in today's (2026) dollars. These figures price the "
+        "average member rather than one person's luck, so they "
+        "won't exactly match your own simulated lifetime "
+        "value. The market-outlook setting doesn't change them "
+        "— the government's cost doesn't depend on how the "
+        "investments perform."
     )
+    plabel = sc.PROFILE_LABELS[profile].lower()
     st.markdown(esc_md(
-        f"**Across the force** (typical "
-        f"{sc.PROFILE_LABELS[profile].lower()} careers, "
+        f"**Across the force** (typical {plabel} careers, "
         "DoD separation rates):\n"
-        f"- {ctx['share_pre20_members']:.0%} of entrants "
-        "separate before 20 years; they receive only "
+        f"- {ctx['share_pre20_members']:.0%} of {plabel} "
+        "entrants separate before 20 years; they receive only "
         f"{ctx['share_pre20_spend']:.1%} of expected BRS "
         "spending\n"
-        f"- {ctx['share_reaching_sep']:.0%} of entrants "
-        f"serve {sep_yos}+ years\n"
-        f"- Expected per-entrant savings from BRS: "
+        f"- {ctx['share_reaching_sep']:.0%} of {plabel} "
+        f"entrants serve {sep_yos}+ years\n"
+        f"- Expected savings per {plabel} entrant from BRS: "
         f"{fmt_usd(ctx['expected_savings'])} "
         f"({fmt_usd(ctx['expected_h3_cost'])} → "
         f"{fmt_usd(ctx['expected_brs_cost'])})"
@@ -774,8 +766,8 @@ with ch1:
     post = mcc[mcc["SepYOS"] >= 20]
     bands = [("p25", "p75", tc["band_a"])]
     for key, color, label in [
-        ("h3_govt", H3_COLOR, "High-Three"),
-        ("brs_govt", tc["brs"], "BRS"),
+        ("h3_govt", H3_COLOR, "High-Three Median"),
+        ("brs_govt", tc["brs"], "BRS Median"),
     ]:
         # The maize H3 line is faint on white; give it a thin
         # navy outline (matching the maize bars' navy edge).
