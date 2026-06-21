@@ -39,15 +39,15 @@ loses, and what does it cost?
   lifetime value in every scenario and essentially every draw — it
   is the only retirement benefit these members get.
 - **20+ year careers:** High-Three yields higher lifetime value at
-  the median in every base-case scenario (−\$98K to −\$294K
+  the median in every base-case scenario (−\$99K to −\$310K
   depending on profile and length), and the gap *grows* with career
   length. The result is most sensitive to TSP return and inflation
   assumptions, and a sustained bull market can flip it.
-- **Sensitivity:** COLA is the largest driver (~\$222K range at the
-  Officer/20 anchor), narrowly ahead of TSP returns (~\$211K); the
+- **Sensitivity:** COLA is the largest driver (~\$234K range at the
+  Officer/20 anchor), narrowly ahead of TSP returns (~\$216K); the
   discount rate matters least.
 - **Government cost:** BRS is unambiguously cheaper — roughly
-  **10–13% less per entrant** (~\$95K/officer, ~\$24K/enlisted),
+  **10.5–12.5% less per entrant** (~\$95K/officer, ~\$24K/enlisted),
   ~\$5.1B per annual accession cohort, and positive across the
   modeled uncertainty range and a separation-timing what-if.
 - **Where the money goes:** Only ~1–4% of DoD's retirement
@@ -55,8 +55,8 @@ loses, and what does it cost?
   the smaller pension BRS pays each career retiree (12–14%
   less), which outweighs the cost of the new TSP contributions
   BRS pays to all members. The 20th year of service
-  still raises DoD's obligation by \$0.8–1.7M per member, so BRS
-  softens the government-side cliff only modestly.
+  still raises DoD's High-Three obligation by \$1.0–1.7M per
+  member, so BRS softens the government-side cliff only modestly.
 - **The two-sided story:** BRS spread the benefit across the ~80%
   who previously got nothing and cut DoD's costs — financed largely
   by the career force, whose 20+ year members are \$100–290K worse
@@ -113,7 +113,7 @@ age — at 20,000 iterations per scenario, with a quantitative
 convergence check (20K vs 40K shift < 1% of the P10–P90 spread).
 Key design choice: BRS and H3 TSP accounts share the same return
 draws, so the difference isolates contributions, not luck.
-Headline: Officer/20 P50 ≈ **−\$154K**, but pre-20 separations
+Headline: Officer/20 P50 ≈ **−\$155K**, but pre-20 separations
 favor BRS in essentially every draw.
 
 ### 04 — Government fiscal impact
