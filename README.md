@@ -235,3 +235,13 @@ streamlit run app/streamlit_app.py
   gender is not modeled as a full dimension.
 - Continuation pay (a mid-career BRS cash incentive) is excluded,
   which biases the comparison slightly against BRS.
+
+## About this project
+
+An independent project completed for the University of Michigan AI &
+Data Science Graduate Certificate (2026).
+
+The analysis and any opinions expressed are solely the author's own
+and do not represent an official position or endorsement of the U.S.
+Department of Defense or any other organization. Nothing here is
+financial, tax, or retirement advice.
