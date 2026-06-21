@@ -50,10 +50,11 @@ loses, and what does it cost?
   **10–13% less per entrant** (~\$95K/officer, ~\$24K/enlisted),
   ~\$5.1B per annual accession cohort, and positive across the
   modeled uncertainty range and a separation-timing what-if.
-- **Where the money goes:** BRS barely redistributes on a cost
-  basis — only ~1–4% of DoD's retirement spending reaches the
-  ≤19-YOS majority; the savings come from paying retirees 12–14%
-  less, not from spreading the money. The 20th year of service
+- **Where the money goes:** Only ~1–4% of DoD's retirement
+  spending reaches the ≤19-YOS majority; the savings come from
+  the smaller pension BRS pays each career retiree (12–14%
+  less), which outweighs the cost of the new TSP contributions
+  BRS pays to all members. The 20th year of service
   still raises DoD's obligation by \$0.8–1.7M per member, so BRS
   softens the government-side cliff only modestly.
 - **The two-sided story:** BRS spread the benefit across the ~80%
