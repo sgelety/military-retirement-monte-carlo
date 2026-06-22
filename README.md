@@ -302,9 +302,12 @@ streamlit run app/streamlit_app.py
 ## About this project
 
 This project was completed independently for the University of
-Michigan AI & Data Science Graduate Certificate (2026).
+Michigan AI & Data Science Graduate Certificate (2026). It grew out
+of the author's experience as a U.S. Coast Guard officer, who faced
+the one-time legacy-vs-BRS election when the system was introduced in
+2018.
 
 The analysis and any opinions expressed are solely the author's own
 and do not represent an official position or endorsement of the U.S.
-Department of Defense or any other organization. Nothing here is
-financial, tax, or retirement advice.
+Coast Guard, the Department of Defense, or any other organization.
+Nothing here is financial, tax, or retirement advice.
