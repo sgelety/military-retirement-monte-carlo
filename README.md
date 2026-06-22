@@ -89,10 +89,10 @@ durable or a further adjustment may eventually be warranted.
   more to the member** than BRS, depending on profile and length —
   and the gap *grows* with career length, though a sustained bull
   market can flip it.
-- **Sensitivity:** COLA (inflation) is the largest driver (~\$234K
+- **Sensitivity:** COLA (inflation) is the largest driver (\~\$234K
   range at the **Officer/20 anchor** — the officer-who-serves-20-years
   reference case used throughout), narrowly ahead of TSP returns
-  (~\$216K); the discount rate matters least.
+  (\~\$216K); the discount rate matters least.
 - **Government cost:** BRS is unambiguously cheaper for DoD —
   roughly **10.5–12.5% less per entrant** (about \$95K less per
   officer, \$24K less per enlisted member), or ~\$5.1B less per
