@@ -244,7 +244,11 @@ kernel.
 A Streamlit app shows both sides of the ledger for any single
 career — what the system change is worth to the member (live
 Monte Carlo, N=20,000) and what that career costs the government
-under each system — plus where it sits on the pension-cliff curve:
+under each system — plus where it sits on the pension-cliff curve.
+
+**[▶ Try it live](https://military-retirement-monte-carlo.streamlit.app/)** — no install required.
+
+Or run it locally:
 
 ```
 streamlit run app/streamlit_app.py
