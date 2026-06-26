@@ -16,7 +16,8 @@ from pathlib import Path
 
 import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
+from matplotlib.legend_handler import HandlerBase
+from matplotlib.lines import Line2D
 import pandas as pd
 import streamlit as st
 
@@ -65,9 +66,8 @@ def theme():
     (``st.context.theme.type``), which left text near-white on a
     white page when the detected theme and the actual page
     disagreed. Fills are near-opaque so the colors read vividly
-    rather than washing out; the single-series difference fan is the
-    most opaque, the two overlapping bands in the government chart
-    stay translucent enough to show where they cross.
+    rather than washing out; the single-series difference fan
+    (the only banded chart) is the most opaque.
     """
     return {
         "fg": "#262730",
@@ -76,8 +76,6 @@ def theme():
         "brs_label": "#00274C",
         "h3_label": "#6b540f",
         "profiles": PROFILE_COLORS,
-        "h3_fill": H3_COLOR,
-        "band_a": 0.55,
         "region_a": 0.18,
         "diff_a": 0.85,
     }
@@ -168,10 +166,14 @@ HOW_IT_WORKS = (
     "enormously on how many years it actually pays. If you "
     "have a personal view, the *expected lifespan* control "
     "shifts your simulated longevity up or down.\n\n"
-    "The chart line and the shaded band show the spread "
-    "across those 20,000 futures: the median is the middle "
-    "outcome, and the band holds the middle 50% — half of "
-    "all simulated futures land inside it.\n\n"
+    "Each median line is the middle outcome across those "
+    "20,000 futures. On the difference chart you can set the "
+    "shaded band to the middle 50% (the typical range) or the "
+    "middle 80% (wider, reaching further into the good- and "
+    "bad-luck tails). The left chart stays uncluttered with "
+    "just the median lines — the spread of each system on its "
+    "own is mostly shared luck that cancels when you compare "
+    "the two.\n\n"
     "**Why everything is in \"2026 dollars at separation\".** "
     "A dollar promised in 2055 is worth less than a dollar "
     "today — both because of inflation and because money in "
@@ -191,7 +193,7 @@ HOW_IT_WORKS = (
     "above 5%: the match is maxed, and beyond that it's "
     "your money under both systems.\n\n"
     "**The market-outlook setting** answers a different "
-    "question than the shaded bands. The bands show *luck* "
+    "question than the shaded band. The band shows *luck* "
     "— good and bad return sequences around the historical "
     "average. The outlook setting shifts the *average "
     "itself* by 2 percentage points, sustained for your "
@@ -476,6 +478,18 @@ outlook = st.sidebar.radio(
     ),
 )
 
+# Difference-chart band width. The radio itself is rendered
+# under chart 2 (it's a view toggle, not an input), but its
+# value is needed to draw that chart, so read it from session
+# state here and instantiate the widget with this key below.
+BAND_PCTS = {
+    "Middle 50%": ("p25", "p75"),
+    "Middle 80%": ("p10", "p90"),
+}
+band_choice = st.session_state.get("band_view", "Middle 50%")
+band_lo, band_hi = BAND_PCTS[band_choice]
+band_label = f"{band_choice} of outcomes"
+
 with st.sidebar.expander("Advanced"):
     disc_pct = st.slider(
         "Discount rate (%)",
@@ -756,24 +770,75 @@ with right:
 # ----------------------------------------------------------
 # Charts
 # ----------------------------------------------------------
+class _VLineHandler(HandlerBase):
+    """Render a legend entry as a short vertical line.
+
+    The separation marker is a vertical line on the chart; a
+    vertical swatch keeps it distinct from the horizontal data
+    lines (the deterministic line is also dashed and dark).
+    """
+
+    def create_artists(self, legend, orig_handle, xdescent,
+                        ydescent, width, height, fontsize,
+                        trans):
+        x = width / 2.0
+        line = Line2D(
+            [x, x], [0, height],
+            linestyle=orig_handle.get_linestyle(),
+            linewidth=orig_handle.get_linewidth(),
+            color=orig_handle.get_color(),
+            alpha=orig_handle.get_alpha(),
+        )
+        line.set_transform(trans)
+        return [line]
+
+
+def legend_with_sep(ax, sep_yos, fg, **kw):
+    """Axes legend plus a vertical-line entry for the
+    separation reference line (drawn vertical to set it apart
+    from the horizontal data lines)."""
+    sep = Line2D([], [], color=fg, lw=1.8, ls="--", alpha=0.9)
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(
+        handles + [sep],
+        labels + [f"Your separation (YOS {sep_yos})"],
+        handler_map={sep: _VLineHandler()},
+        fontsize=8, **kw,
+    )
+
+
 st.subheader("Where your career sits on the cliff")
 life_note = (
     f" Expected lifespan: {life_offset:+d} yr vs. average."
     if life_offset else ""
 )
 st.caption(
-    f"Market outlook: {outlook}.{life_note} Lines are Monte "
-    "Carlo medians across every possible separation year; the "
-    f"shaded band is the middle 50% of {N_ITER:,} simulated "
-    "futures."
+    f"Values come from {N_ITER:,} simulated futures, computed "
+    "across every possible separation year. Both charts show "
+    "government-funded value only (the pension plus government "
+    "TSP); the part you fund yourself is identical under both "
+    "systems, so it's excluded to isolate what the government "
+    f"provides.{life_note}"
 )
-ch1, ch2 = st.columns(2)
+# Stacked vertically, not side-by-side: the two charts share
+# the x-axis (Years of Service), not the y-axis,
+# so aligning their x-axes top-to-bottom lets you read a given
+# separation year — the 20-year cliff, your-YOS line — straight
+# down both. On the wide layout each also gets the full page
+# width, which the dense 4–40 YOS axis needs.
+ch1 = st.container()
+ch2 = st.container()
 
 with ch1:
-    fig, ax = plt.subplots(figsize=(7, 4.2))
+    # Structure/levels only: the median value per system, no
+    # bands. The spread of each system's value in isolation is
+    # dominated by shared mortality/COLA luck that cancels in
+    # the BRS-vs-H3 comparison, so the uncertainty story belongs
+    # on the difference chart (ch2), not on two overlapping
+    # marginal bands here.
+    fig, ax = plt.subplots(figsize=(11, 4.5))
     pre = mcc[mcc["SepYOS"] < 20]
     post = mcc[mcc["SepYOS"] >= 20]
-    bands = [("p25", "p75", tc["band_a"])]
     for key, color, label in [
         ("h3_govt", H3_COLOR, "High-Three Median"),
         ("brs_govt", tc["brs"], "BRS Median"),
@@ -785,28 +850,9 @@ with ch1:
              pe.Normal()]
             if key == "h3_govt" else None
         )
-        # Band fill uses the brighter maize on dark so it reads
-        # gold rather than olive; the line keeps the true maize.
-        fill = tc["h3_fill"] if key == "h3_govt" else color
         if has_cliff:
             cu = cusp[key]
             xp = list(pre["SepYOS"]) + [20]
-            # P25–P75 band, extended to its value on the cusp
-            # of vesting at 20 (TSP only, no pension yet).
-            for lo, hi, a in bands:
-                ax.fill_between(
-                    xp,
-                    list(pre[f"{key}_{lo}"] / 1000)
-                    + [cu[lo] / 1000],
-                    list(pre[f"{key}_{hi}"] / 1000)
-                    + [cu[hi] / 1000],
-                    alpha=a, color=fill,
-                )
-                ax.fill_between(
-                    post["SepYOS"], post[f"{key}_{lo}"] / 1000,
-                    post[f"{key}_{hi}"] / 1000,
-                    alpha=a, color=fill,
-                )
             # Median: pre to the cusp (open marker = limit not
             # attained), dotted drop = the cliff, then 20+.
             ax.plot(
@@ -830,12 +876,6 @@ with ch1:
                 color=color, lw=2, path_effects=line_pe,
             )
         else:
-            for lo, hi, a in bands:
-                ax.fill_between(
-                    mcc["SepYOS"], mcc[f"{key}_{lo}"] / 1000,
-                    mcc[f"{key}_{hi}"] / 1000,
-                    alpha=a, color=fill,
-                )
             ax.plot(
                 mcc["SepYOS"], mcc[f"{key}_p50"] / 1000,
                 color=color, lw=2, label=label,
@@ -845,29 +885,45 @@ with ch1:
             [sep_yos], [mc[key]["p50"] / 1000], "o",
             color=color,
         )
+    # Label each selected-point median ($M, 2 dp), offset toward
+    # chart center so the text clears the panel edge; the higher
+    # value sits above its dot and the lower below, so the two
+    # don't collide. Maize is unreadable as text on white, so the
+    # H3 label uses dark gold (tc["h3_label"]).
+    x_lo, x_hi = ax.get_xlim()
+    dx, lab_ha = ((-6, "right") if sep_yos > (x_lo + x_hi) / 2
+                  else (6, "left"))
+    pts = {
+        "h3_govt": (mc["h3_govt"]["p50"], tc["h3_label"]),
+        "brs_govt": (mc["brs_govt"]["p50"], tc["brs_label"]),
+    }
+    hi_key = max(pts, key=lambda k: pts[k][0])
+    for pkey, (pval, ptext) in pts.items():
+        above = pkey == hi_key
+        ax.annotate(
+            f"${pval / 1e6:.2f}M",
+            xy=(sep_yos, pval / 1000),
+            xytext=(dx, 9 if above else -9),
+            textcoords="offset points",
+            ha=lab_ha, va="bottom" if above else "top",
+            fontsize=8, fontweight="bold", color=ptext,
+            bbox=dict(
+                boxstyle="round,pad=0.2", fc="white",
+                ec="none", alpha=0.75,
+            ),
+            zorder=7,
+        )
     ax.axvline(
-        sep_yos, color=fg, linewidth=0.8, linestyle=":",
+        sep_yos, color=fg, linewidth=1.8, linestyle="--",
+        alpha=0.9, zorder=5,
     )
-    ax.set_xlabel("Years of Service at Separation")
-    ax.set_ylabel("Government-Funded Value (2026 $)")
-    ax.set_title(
-        "Government-Funded Value by System\n"
-        "(excludes your TSP contribution — identical under both)"
-    )
+    ax.set_xlabel("Years of Service")
+    ax.set_ylabel("Lifetime Retirement Value (2026 $)")
+    ax.set_title("Lifetime Retirement Value by System")
     ax.yaxis.set_major_formatter(
         plt.FuncFormatter(lambda v, _: f"${v / 1000:,.1f}M")
     )
-    # Gray proxies explain the (per-system colored) bands.
-    sys_h, sys_l = ax.get_legend_handles_labels()
-    band_h = [
-        Patch(facecolor="0.5", alpha=0.45,
-              label="Middle 50% of outcomes"),
-    ]
-    ax.legend(
-        sys_h + band_h,
-        sys_l + [h.get_label() for h in band_h],
-        fontsize=8,
-    )
+    legend_with_sep(ax, sep_yos, fg)
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     st.pyplot(fig)
@@ -878,7 +934,7 @@ with ch2:
     # The median sits on a near-opaque fill of the same profile
     # color; a thin dark outline keeps the line readable on it.
     med_pe = [pe.Stroke(linewidth=3.4, foreground=fg), pe.Normal()]
-    fig, ax = plt.subplots(figsize=(7, 4.2))
+    fig, ax = plt.subplots(figsize=(11, 4.5))
     pre = mcc[mcc["SepYOS"] < 20]
     post = mcc[mcc["SepYOS"] >= 20]
     if has_cliff:
@@ -888,16 +944,16 @@ with ch2:
         # 20, where both pensions are still zero).
         ax.fill_between(
             xp,
-            list(pre["brs_adv_p25"] / 1000)
-            + [cu["p25"] / 1000],
-            list(pre["brs_adv_p75"] / 1000)
-            + [cu["p75"] / 1000],
+            list(pre[f"brs_adv_{band_lo}"] / 1000)
+            + [cu[band_lo] / 1000],
+            list(pre[f"brs_adv_{band_hi}"] / 1000)
+            + [cu[band_hi] / 1000],
             alpha=tc["diff_a"], color=pcolor,
-            label="Middle 50% of outcomes",
+            label=band_label,
         )
         ax.fill_between(
-            post["SepYOS"], post["brs_adv_p25"] / 1000,
-            post["brs_adv_p75"] / 1000,
+            post["SepYOS"], post[f"brs_adv_{band_lo}"] / 1000,
+            post[f"brs_adv_{band_hi}"] / 1000,
             alpha=tc["diff_a"], color=pcolor,
         )
         # Median, broken at the cliff the same way.
@@ -938,10 +994,10 @@ with ch2:
         )
     else:
         ax.fill_between(
-            mcc["SepYOS"], mcc["brs_adv_p25"] / 1000,
-            mcc["brs_adv_p75"] / 1000,
+            mcc["SepYOS"], mcc[f"brs_adv_{band_lo}"] / 1000,
+            mcc[f"brs_adv_{band_hi}"] / 1000,
             alpha=tc["diff_a"], color=pcolor,
-            label="Middle 50% of outcomes",
+            label=band_label,
         )
         ax.plot(
             mcc["SepYOS"], mcc["brs_adv_p50"] / 1000,
@@ -958,9 +1014,10 @@ with ch2:
     )
     ax.axhline(0, color=fg, linewidth=0.8, linestyle=":")
     ax.axvline(
-        sep_yos, color=fg, linewidth=0.8, linestyle=":",
+        sep_yos, color=fg, linewidth=1.8, linestyle="--",
+        alpha=0.9, zorder=5,
     )
-    ax.set_xlabel("Years of Service at Separation")
+    ax.set_xlabel("Years of Service")
     ax.set_ylabel("Lifetime Value Advantage (2026 $)")
     ax.set_title(
         "Lifetime Value Difference: BRS vs. High-Three"
@@ -968,9 +1025,30 @@ with ch2:
     ax.yaxis.set_major_formatter(
         plt.FuncFormatter(lambda v, _: f"${abs(v):,.0f}K")
     )
+    # Fix the y-axis to the widest (80%) band extent, regardless
+    # of the selected band width, so toggling 50%/80% rescales
+    # nothing — the median/deterministic curves stay put and the
+    # narrower 50% band just sits inside the same frame, making
+    # the change in spread easy to see. Always include 0 so both
+    # advantage regions show.
+    y_cands = [
+        0.0,
+        (mcc["brs_adv_p10"] / 1000).min(),
+        (mcc["brs_adv_p90"] / 1000).max(),
+        (curve["BRSAdv"] / 1000).min(),
+        (curve["BRSAdv"] / 1000).max(),
+        mc["brs_adv"]["p50"] / 1000,
+    ]
+    if has_cliff:
+        y_cands += [
+            cusp["brs_adv"]["p10"] / 1000,
+            cusp["brs_adv"]["p90"] / 1000,
+        ]
+    y_lo, y_hi = min(y_cands), max(y_cands)
+    pad = 0.05 * (y_hi - y_lo)
     # All-positive magnitude axis; shade which system leads
     # (light blue = BRS advantage, light maize = High-Three).
-    ymin, ymax = ax.get_ylim()
+    ymin, ymax = y_lo - pad, y_hi + pad
     ax.axhspan(
         0, ymax, color=BRS_REGION, alpha=tc["region_a"], zorder=0
     )
@@ -987,11 +1065,41 @@ with ch2:
         transform=ax.transAxes, fontsize=9, style="italic",
         color=tc["h3_label"],
     )
-    ax.legend(fontsize=8, loc="upper right")
+    # Legend below the axes (not in a corner): the difference
+    # fan is often wide and crosses the whole panel, so any
+    # in-axes corner can collide with it. Placing it below keeps
+    # the plot width unchanged, so the x-axis still aligns with
+    # the chart above. Streamlit saves with bbox_inches="tight",
+    # so the off-axes legend is not clipped.
+    legend_with_sep(
+        ax, sep_yos, fg,
+        loc="upper center", bbox_to_anchor=(0.5, -0.20),
+        ncol=4,
+    )
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     st.pyplot(fig)
     plt.close(fig)
+
+    # Band-width view toggle, centered under this chart. It is a
+    # view control rather than a model input, so it lives here
+    # instead of the sidebar; session_state["band_view"] feeds
+    # the draw above on the next rerun.
+    _, mid, _ = st.columns([1, 2, 1])
+    with mid:
+        st.radio(
+            "Uncertainty band",
+            list(BAND_PCTS),
+            key="band_view",
+            horizontal=True,
+            help=(
+                "How much of the simulated spread the shaded "
+                "band covers: the middle 50% (the tighter, "
+                "more typical range) or the middle 80% (wider, "
+                "reaching further into the good- and bad-luck "
+                "tails)."
+            ),
+        )
 
 # ----------------------------------------------------------
 # Plain-language explanation (Gemini, built-in fallback)

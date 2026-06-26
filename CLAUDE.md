@@ -48,7 +48,7 @@ The project is implemented in Python using Jupyter Notebooks in VS Code.
 - **20-year cliff** is a discontinuity, not a slope: never connect YOS 18→20 directly. Split each series into pre-20 and 20+ segments; extend the pre-20 segment to its **value on the cusp of vesting** at 20 (the TSP-only difference, pensions zero on both sides below 20 — available deterministically as `BRS_TSP_PV − H3TSP_PV`; for MC bands recompute the TSP-only percentiles at 20 from the same-seed `run_scenario`), drawn as an **open marker** (limit not attained) with a dotted vertical drop to the filled vested value.
 - **Small multiples:** one shared x-label via `fig.supxlabel`, one legend (not one per panel).
 - **Units:** drop the unit word when the tick suffix implies it ("thousands" with `K` ticks, "billions" with `B` ticks); whole-number ticks where decimals add nothing.
-- **Status:** Styling pass complete — 03a, 03b, 04, 05 and the Streamlit app fan charts all restyled. nb04/nb05 were edited via scripted JSON cell-replacement (they exceed the Read-tool size limit) and re-executed in place with the project `.venv` (`jupyter nbconvert --execute --inplace`). nb05 specifics: all five figures share a palette block in the setup cell (`BRS_COLOR`/`H3_COLOR`/`BRS_REGION`/`H3_REGION`/`PROFILE_COLORS`); the OAT tornado and scenario plot keep a **signed** axis (clearer for 4 crossing lines / a negative anchor) with direction stated in the axis label or via light-blue/light-maize region shading + "BRS advantage" (UM blue) / "High-Three advantage" (dark gold) labels. The OAT tornado uses the maize/blue system bars (navy-edged, H3-side value labels in dark gold); the **scenario plot** uses the four Matplotlib default-cycle colors — blue/orange/green/red for Base/Bull/Bear/Low-Participation — matching the convergence chart, a deliberate exception to the system palette (user decision 2026-06-15). The scenario curves apply the full cliff split (open-marker TSP-only cusp at 20 → dotted drop → filled vested marker), reusing the same seeded `run_scenario` (`brs_tsp_pv − h3_tsp_pv` P50) for the cusp; the two separation-shift bar charts use each panel's profile color for the shifted bars and a lighter tint of it (`PROFILE_LIGHT` in the palette cell, ~50% toward white) for the de-emphasized baseline bars; the obligation chart keeps the green "saves" arrows for the regimes where BRS is cheaper but draws the negative (drastic) "BRS costs" arrow+label in red — red is allowed here to flag the regime where BRS costs more (the project's earlier "no red" note applied only to the system/profile palette, not to this warning annotation). Matplotlib `\$` must sit in a **raw** f-string (`rf"…"`) to avoid a Python 3.13 SyntaxWarning at cell execution. App fan charts: recolored to BRS-blue/H3-maize, the difference chart now uses the all-positive magnitude axis + light-blue/light-maize region shading, and both fans apply the cliff split — a new `mc_cusp()` in `app/scenario_calcs.py` (cached via `cached_mc_cusp`) recomputes the cusp percentiles at YOS 20 from the same per-YOS-seeded `run_scenario`, gated on `has_cliff` (career reaches 20). The left fan was reframed from absolute lifetime totals to **government-funded value** (`h3_govt` = pension; `brs_govt` = pension + govt TSP), excluding the member's own 5% — which is identical under both systems and cancels in the difference — so High-Three reads exactly \$0 below 20 (matching the project's difference framing; absolute member totals are charted nowhere else). `mc_curve`/`mc_cusp`/`mc_from_curve_row` gained the `h3_govt`/`brs_govt` percentile columns/keys.
+- **Status:** Styling pass complete — 03a, 03b, 04, 05 and the Streamlit app fan charts all restyled. nb04/nb05 were edited via scripted JSON cell-replacement (they exceed the Read-tool size limit) and re-executed in place with the project `.venv` (`jupyter nbconvert --execute --inplace`). nb05 specifics: all five figures share a palette block in the setup cell (`BRS_COLOR`/`H3_COLOR`/`BRS_REGION`/`H3_REGION`/`PROFILE_COLORS`); the OAT tornado and scenario plot keep a **signed** axis (clearer for 4 crossing lines / a negative anchor) with direction stated in the axis label or via light-blue/light-maize region shading + "BRS advantage" (UM blue) / "High-Three advantage" (dark gold) labels. The OAT tornado uses the maize/blue system bars (navy-edged, H3-side value labels in dark gold); the **scenario plot** uses the four Matplotlib default-cycle colors — blue/orange/green/red for Base/Bull/Bear/Low-Participation — matching the convergence chart, a deliberate exception to the system palette (user decision 2026-06-15). The scenario curves apply the full cliff split (open-marker TSP-only cusp at 20 → dotted drop → filled vested marker), reusing the same seeded `run_scenario` (`brs_tsp_pv − h3_tsp_pv` P50) for the cusp; the two separation-shift bar charts use each panel's profile color for the shifted bars and a lighter tint of it (`PROFILE_LIGHT` in the palette cell, ~50% toward white) for the de-emphasized baseline bars; the obligation chart keeps the green "saves" arrows for the regimes where BRS is cheaper but draws the negative (drastic) "BRS costs" arrow+label in red — red is allowed here to flag the regime where BRS costs more (the project's earlier "no red" note applied only to the system/profile palette, not to this warning annotation). Matplotlib `\$` must sit in a **raw** f-string (`rf"…"`) to avoid a Python 3.13 SyntaxWarning at cell execution. App fan charts: recolored to BRS-blue/H3-maize, the difference chart now uses the all-positive magnitude axis + light-blue/light-maize region shading, and both fans apply the cliff split — a new `mc_cusp()` in `app/scenario_calcs.py` (cached via `cached_mc_cusp`) recomputes the cusp percentiles at YOS 20 from the same per-YOS-seeded `run_scenario`, gated on `has_cliff` (career reaches 20). The top fan was reframed from absolute lifetime totals to **government-funded value** (`h3_govt` = pension; `brs_govt` = pension + govt TSP), excluding the member's own 5% — which is identical under both systems and cancels in the difference — so High-Three reads exactly \$0 below 20 (matching the project's difference framing; absolute member totals are charted nowhere else). `mc_curve`/`mc_cusp`/`mc_from_curve_row` gained the `h3_govt`/`brs_govt` percentile columns/keys.
 
 **Monte Carlo stochastic variables (all others held fixed within each scenario):**
 1. TSP investment returns (parameterized from TSP L Fund historical data)
@@ -309,8 +309,9 @@ repo root: `streamlit run app/streamlit_app.py`.
   *relative* offset (not an absolute age) so it stays stable as the
   separation slider moves and is exactly 0/identical-to-notebooks at
   default. **Scoped to the member side only:** it moves the member
-  ledger, both fans' member bands, and the right-fan deterministic
-  overlay, but **not** the government ledger — `deterministic_values`
+  ledger, the top fan's median lines and the difference fan's band
+  and deterministic overlay, but **not** the government ledger —
+  `deterministic_values`
   computes the government pension cost at the population-mean
   `n_pens` (offset 0) and the member pension at `n_pens + offset`,
   because DoD prices the cohort, not one member's longevity (same
@@ -375,12 +376,32 @@ repo root: `streamlit run app/streamlit_app.py`.
   advantage" (dark gold `#6b540f`) labels, and
   both fans break at the 20-YOS cliff (open-marker cusp → dotted
   drop → vested), keeping the profile color on the difference
-  band. The left fan shows **government-funded value** by system
+  band. The two fans are **stacked vertically** — government-value
+  fan on top, difference fan below (`st.container`, not
+  `st.columns`; figsize 11×4.5, full wide-page width) — because they
+  share the x-axis (separation YOS), not the y-axis, so their
+  x-axes align top-to-bottom for reading a given YOS straight down
+  (the cliff, the your-YOS line) (2026-06-25). The top fan shows
+  **government-funded value** by system
   (`h3_govt` pension; `brs_govt` pension + govt TSP), excluding
   the member's own 5% TSP (identical under both, so it cancels) —
   so High-Three is \$0 below 20. (Earlier the app used a
   deliberately disjoint dimgray/crimson, signed axes, and plotted
-  absolute member totals; superseded.)
+  absolute member totals; superseded.) **The top fan is median
+  lines only — no bands (2026-06-25).** Each system's marginal
+  spread is dominated by shared mortality/COLA luck that cancels in
+  the BRS-vs-H3 comparison (and two overlapping marginal bands
+  invite the overlapping-CI fallacy), so the uncertainty story lives
+  solely on the difference fan. That fan's band width is a **user
+  toggle** between the middle 50% (`p25`–`p75`, default) and middle
+  80% (`p10`–`p90`) — a `band_view` radio centered under the
+  difference chart (a view control, read from `st.session_state`, so
+  it redraws only that chart and touches no model input). The
+  difference chart's y-axis is **fixed to the 80% (p10/p90)
+  envelope regardless of the selected width** (computed from the
+  band, deterministic curve, median, cusp, and 0), so toggling
+  50%/80% rescales nothing — the narrower band just sits inside the
+  same frame, making the change in spread easy to read.
 - **Fixed white chart panels (mode-independent).** Every app
   figure is a self-contained white panel that renders identically
   and stays legible whether the Streamlit page is light or dark.
@@ -396,11 +417,11 @@ repo root: `streamlit run app/streamlit_app.py`.
   buggy in light mode (detection could flip the text to near-white
   on the white page, making titles/labels unreadable). Fills are now
   near-opaque so colors read vividly on white: `diff_a = 0.85`
-  (single-series difference fan), `band_a = 0.55` (the two
-  overlapping government-value bands, kept translucent enough to show
-  where they cross), `region_a = 0.18` (subtle half-shading). The
-  maize H3 line keeps its navy outline; `h3_fill = H3_COLOR`
-  (`#FFCB05`). Accents — the deterministic dash, the zero/your-YOS
+  (the difference fan — the only banded chart now that the left
+  fan is median-only), `region_a = 0.18` (subtle half-shading).
+  The `band_a = 0.55` and `h3_fill` theme keys were removed with
+  the left-fan bands (2026-06-25). The maize H3 line on the left
+  fan keeps its navy outline (`H3_COLOR` `#FFCB05`). Accents — the deterministic dash, the zero/your-YOS
   reference lines, the selected-point dot — use `fg`, and open-marker
   fills use `bg` (white). `theme_fg()` (rank strip) delegates to
   `theme()`. A white panel sits on the dark page in dark mode (a
