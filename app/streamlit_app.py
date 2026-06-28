@@ -18,6 +18,7 @@ import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 from matplotlib.legend_handler import HandlerBase
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 import pandas as pd
 import streamlit as st
 
@@ -44,6 +45,12 @@ PROFILE_COLORS = {
 # P10-P90 spread). Not user-adjustable: the only effect of a
 # lower count is noisier bands, with no benefit to the reader.
 N_ITER = 20_000
+
+# Annual force accessions for scaling per-entrant savings to a
+# whole cohort, matching nb04/nb05. Prior-enlisted officers are
+# not a separate line: they enter as enlisted accessions, so a
+# third line would double-count them.
+ACCESSIONS = {"Enlisted": 140_000, "Officer": 18_000}
 
 st.set_page_config(
     page_title="BRS vs. High-Three Explorer",
@@ -122,145 +129,153 @@ def esc_md(text):
 
 
 # ----------------------------------------------------------
-# Static copy — long, unchanging blurbs for the two expanders.
-# Kept here (rather than mid-layout) so the render flow below
-# reads as structure. Pass through esc_md() at render time.
+# Static copy — long, unchanging blurbs for the expanders and
+# the top-of-page summary. Kept here (rather than mid-layout)
+# so the render flow below reads as structure. Pass through
+# esc_md() at render time.
 # ----------------------------------------------------------
+SUMMARY = (
+    "Compare the Blended Retirement System (BRS) against the "
+    "legacy High-Three pension for any military career: what "
+    "each is worth to you over a lifetime, and what each costs "
+    "the government, all in today's 2026 dollars."
+)
+
+ABOUT = (
+    "As a U.S. Coast Guard officer, I faced the one-time 2018 "
+    "choice between the legacy High-Three pension and the new "
+    "Blended Retirement System, and this project is my attempt "
+    "to answer that question with simulation instead of a gut "
+    "call. I built it independently for the University of "
+    "Michigan AI & Data Science Graduate Certificate (2026).\n\n"
+    "The choice itself is now historical: everyone who joined "
+    "since 2018 is enrolled in BRS automatically. But the "
+    "comparison still matters, both for those living with the "
+    "2018 decision who want to see how it is likely to play "
+    "out, and as a way to judge the reform itself — whether it "
+    "actually saves money, and who comes out ahead or "
+    "behind.\n\n"
+    "The full analysis and source code are on "
+    "[GitHub](https://github.com/sgelety/"
+    "military-retirement-monte-carlo). I'm also on "
+    "[LinkedIn](https://www.linkedin.com/in/steven-gelety/) — "
+    "feel free to connect or reach out about the project.\n\n"
+    "**How it was built.** I designed the model and made every "
+    "analysis decision: which systems to compare, how to treat "
+    "the 20-year pension cliff, which variables to simulate and "
+    "how, and how to value the cost to the government. Claude "
+    "(Anthropic's AI) helped me write and debug the code that "
+    "carries out those decisions. The methodology, judgment "
+    "calls, and conclusions are entirely my own.\n\n"
+    "**Not financial advice.** This is for education and "
+    "illustration only. It models typical careers with "
+    "simplifying assumptions and can't reflect your full "
+    "situation, so consult a personal financial counselor or "
+    "qualified advisor before making any retirement decision."
+)
+
 HOW_IT_WORKS = (
-    "**What's being compared.** Two retirement systems. "
-    "The legacy **High-Three** pays a pension of 2.5% × "
-    "years served × your highest 36 months of basic pay — "
-    "but only if you reach 20 years. Leave at 19 and you "
-    "get nothing. The **BRS** (everyone joining since 2018) "
-    "pays a smaller pension (2.0% per year, same 20-year "
-    "rule) but adds money to your Thrift Savings Plan (TSP, "
-    "the military's 401(k)-style retirement account) that you "
-    "keep no "
-    "matter when you leave: 1% of basic pay automatically, "
-    "plus matching on your own contributions (full match at "
-    "5%). This app asks: over a whole lifetime, which "
-    "package is worth more for *your* career — and what "
-    "does each cost the government?\n\n"
-    "**Step 1 — your pay history.** From your profile and "
-    "promotion timeline, the app builds your year-by-year "
-    "basic pay using the official 2026 military pay table "
-    "(including the higher O-1E/O-2E/O-3E rates for "
-    "prior-enlisted officers). Rank comes from typical "
-    "promotion timing — or your own edits in the sidebar.\n\n"
-    "**Step 2 — 20,000 possible futures.** Nobody knows "
-    "future market returns, inflation, or how long they'll "
-    "live, so instead of pretending to, the app simulates "
-    "20,000 versions of your future and varies all three:\n"
-    "- **TSP returns** are drawn from the actual history of "
-    "the TSP Lifecycle (L) funds, and your money follows "
-    "the same glide path a real L fund does — aggressive "
-    "stock-heavy funds when you're young, shifting toward "
-    "safer funds as you near 60.\n"
-    "- **Inflation** for each future is drawn from over a "
-    "century of U.S. inflation data, and drives pay raises, "
-    "pension cost-of-living adjustments, and the conversion "
-    "to today's dollars — consistently, all at once.\n"
-    "- **Lifespan** is drawn from the Social Security "
-    "Administration's actuarial tables, given your age at "
-    "separation — because a pension's value depends "
-    "enormously on how many years it actually pays. If you "
-    "have a personal view, the *expected lifespan* control "
-    "shifts your simulated longevity up or down.\n\n"
-    "Each median line is the middle outcome across those "
-    "20,000 futures. On the difference chart you can set the "
-    "shaded band to the middle 50% (the typical range) or the "
-    "middle 80% (wider, reaching further into the good- and "
-    "bad-luck tails). The left chart stays uncluttered with "
-    "just the median lines — the spread of each system on its "
-    "own is mostly shared luck that cancels when you compare "
-    "the two.\n\n"
-    "**Why everything is in \"2026 dollars at separation\".** "
-    "A dollar promised in 2055 is worth less than a dollar "
-    "today — both because of inflation and because money in "
-    "hand earns returns. Every future payment (pension "
-    "checks, TSP balance at 60) is discounted back to your "
-    "separation date at 5% per year and stated in 2026 "
-    "purchasing power, so a pension stream and a TSP "
-    "balance can be compared apples-to-apples.\n\n"
-    "**Why your contribution is the same under both "
-    "systems.** The slider sets *your* TSP contribution "
-    "identically under High-Three and BRS. That's deliberate: "
-    "your "
-    "own savings would follow you either way, so holding it "
-    "equal isolates what the *government* provides "
-    "differently — the match and the pension multiplier. "
-    "That's also why the headline difference doesn't move "
-    "above 5%: the match is maxed, and beyond that it's "
-    "your money under both systems.\n\n"
-    "**The market-outlook setting** answers a different "
-    "question than the shaded band. The band shows *luck* "
-    "— good and bad return sequences around the historical "
-    "average. The outlook setting shifts the *average "
-    "itself* by 2 percentage points, sustained for your "
-    "whole career — a decades-long bull or bear regime. "
-    "It's a strong assumption, and it's the strongest "
-    "single lever on the answer for 20+ year careers.\n\n"
-    "**The government side** values the same career the way "
-    "an actuary would: the pension promise discounted at "
-    "5%, plus the government's TSP deposits compounded at "
-    "that same rate. Force-wide statistics weight each "
-    "possible separation point by the DoD actuary's "
-    "historical separation rates.\n\n"
-    "**What's deliberately left out:** taxes, the BRS "
-    "continuation-pay bonus (a mid-career cash incentive — "
-    "excluding it slightly favors High-Three), reserve/"
-    "guard retirement, and personal withdrawal strategy. "
-    "Promotion timing is asserted by you, not predicted.\n\n"
-    "*Data sources: DFAS 2026 pay table, DoD Office of the "
-    "Actuary separation rates, TSP.gov fund history, SSA "
-    "2022 life tables, BLS CPI (1913–present).*"
+    "**What's compared.** High-Three pays a pension of 2.5% × "
+    "years served × your highest-36-months average pay, but "
+    "only if you reach 20 years — leave at 19 and you get "
+    "nothing. BRS pays a smaller pension (2.0% per year, same "
+    "20-year rule) but adds money to your Thrift Savings Plan "
+    "(TSP, the military's 401(k)) that you keep whenever you "
+    "leave: 1% of pay automatically, plus a match on your "
+    "contributions (full match at 5%).\n\n"
+    "**Your pay.** From your profile and promotion timeline, "
+    "the app builds your year-by-year basic pay from the 2026 "
+    "military pay table — typical promotion timing, or your "
+    "own edits in the sidebar.\n\n"
+    "**20,000 futures.** Nobody knows future returns, "
+    "inflation, or how long they'll live, so the app simulates "
+    "20,000 versions of your future and varies all three: "
+    "**TSP returns** (from the history of the L funds, "
+    "following the same age-based glide path a real L fund "
+    "does), **inflation** (from a century of U.S. data — it "
+    "drives pay raises, pension COLAs, and the conversion to "
+    "today's dollars), and **lifespan** (from SSA actuarial "
+    "tables, since a pension's value depends on how many years "
+    "it pays). The median is the middle outcome; the band on "
+    "the difference chart shows the middle 50% or 80% of "
+    "them.\n\n"
+    "**\"2026 dollars at separation.\"** A dollar promised in "
+    "2055 is worth less than one today, so every future "
+    "payment is discounted back to your separation date "
+    "(5%/yr) and stated in 2026 purchasing power — so a "
+    "pension stream and a TSP balance can be compared "
+    "directly.\n\n"
+    "**Equal contributions.** Your own TSP rate is set the "
+    "same under both systems on purpose: your savings follow "
+    "you either way, so holding them equal isolates what the "
+    "*government* adds — the match and the pension. That's "
+    "also why the difference stops moving above 5%: the match "
+    "is maxed.\n\n"
+    "**The government side** values the same career as an "
+    "actuary would: the pension discounted at 5%, plus the "
+    "government's TSP deposits compounded at that rate. "
+    "Force-wide figures weight each separation year by DoD's "
+    "historical rates.\n\n"
+    "**Left out:** taxes, the BRS continuation-pay bonus "
+    "(excluding it slightly favors High-Three), reserve/guard "
+    "retirement, and withdrawal strategy. Promotion timing is "
+    "asserted by you, not predicted.\n\n"
+    "*Sources: DFAS 2026 pay table, DoD Office of the Actuary "
+    "separation rates, TSP.gov fund history, SSA 2022 life "
+    "tables, BLS CPI (1913–present).*"
 )
 
 ASSUMPTIONS = (
-    "- **Reporting**: NPV at separation, constant 2026 "
-    "dollars; framing is the neutral difference "
-    "(BRS − High-Three), not a recommendation.\n"
-    "- **Deterministic path**: 2.75% COLA / pay growth "
-    "(DoD actuarial), glide-path L Fund historical "
-    "means, SSA 2022 male life expectancy.\n"
-    "- **Monte Carlo**: stochastic TSP returns "
-    "(glide-path L Fund distributions), lifetime-"
-    "average COLA (rolling 30-yr CPI fit), and age at "
-    "death sampled from the SSA 2022 male actuarial "
-    "table — its own left-skewed, table-bounded shape, "
-    "not a symmetric bell curve.\n"
-    "- **TSP**: member contributes the same rate under "
-    "both systems; BRS adds 1% automatic plus up to 4% "
-    "match (from YOS 3). Returns follow the L Fund "
-    "glide path to age 60, then drawdown pricing at "
-    "the discount rate.\n"
-    "- **Market outlook**: a uniform ±2 pp shift of all "
-    "glide-path mean returns — a sustained decades-long bull "
-    "or bear market regime (the full scenario analysis also "
-    "varies COLA and discount rate; here the discount rate is "
-    "its own Advanced control). A separate construct from the "
-    "Monte Carlo's year-to-year variation.\n"
+    "**How the numbers are computed**\n\n"
+    "- **Reporting**: net present value at separation (5% "
+    "discount rate), in constant 2026 dollars.\n"
+    "- **TSP** (Thrift Savings Plan, the military's 401(k)): "
+    "you contribute the same rate under both systems; BRS adds "
+    "1% automatic plus up to 4% match (from year 3). Balances "
+    "ride the Lifecycle (L) fund glide path — stock-heavy when "
+    "you're young, shifting to safer funds as you near 60 — "
+    "and are priced at the discount rate in the drawdown years "
+    "after 60.\n"
+    "- **Center-path figures** (the government cost, and the "
+    "first-year pension and TSP-at-separation in your table): "
+    "one fixed calculation — 2.75% COLA / pay growth (DoD "
+    "actuarial), historical-mean returns, SSA 2022 male life "
+    "expectancy. Not simulated, because the government cost is "
+    "valued the way DoD budgets it (present value of the "
+    "promise under fixed assumptions) and the other two are "
+    "single snapshots at separation; the return, inflation, "
+    "and lifespan uncertainty matters for the decades-long "
+    "lifetime totals, which is where the simulation comes "
+    "in.\n"
+    "- **Simulated figures** (the median lifetime values and "
+    "the chart band): 20,000 draws of TSP returns from "
+    "historical fund data, lifetime-average COLA (rolling "
+    "30-yr CPI fit), and age at death from the SSA 2022 male "
+    "table.\n\n"
+    "**What your settings change**\n\n"
+    "- **Entry age** (default 18 enlisted / 22 officer / 18 "
+    "prior-enlisted) shifts every age-based input: the glide "
+    "path, how long your balance keeps growing toward age 60, "
+    "and the life-expectancy lookup.\n"
+    "- **Promotion timeline**: rank is asserted by you (or the "
+    "typical table), not predicted; pay comes from the 2026 "
+    "DFAS table.\n"
     "- **Expected lifespan**: re-centers your sampled age at "
-    "death by the chosen number of years (0 = the SSA average "
-    "for your age), keeping the distribution's shape and "
-    "spread. It moves only your personal value — the "
-    "government's actuarial cost stays priced on the cohort "
+    "death by the chosen years (0 = the SSA average for your "
+    "age), keeping the shape and spread. It moves only your "
+    "value — the government's cost stays at the cohort "
     "average.\n"
-    "- **Promotion timeline**: rank is asserted by you "
-    "(or the typical table), not predicted; pay is "
-    "priced from the 2026 DFAS table.\n"
-    "- **Entry age** (default 18 enlisted / 22 officer / "
-    "18 prior-enlisted) shifts every age-keyed input: "
-    "the TSP glide path, the growth window to 60, and "
-    "the life-expectancy lookup. Separations past age "
-    "60 are handled (no growth window).\n"
-    "- **Out of scope**: reserve retirement, "
-    "continuation pay, TSP withdrawal strategy, and "
-    "behavioral retention effects.\n"
-    "- Force-wide context uses DoD actuarial "
-    "separation rates on the standard profiles; your "
-    "custom timeline changes your ledger, not the "
-    "force-wide stats."
+    "- **Market outlook**: a uniform ±2 pp shift of the mean "
+    "returns — a sustained, decades-long bull or bear regime, "
+    "separate from the simulation's year-to-year luck. It "
+    "doesn't move the government cost.\n\n"
+    "**Scope & limitations**\n\n"
+    "- **Out of scope**: reserve retirement, continuation pay, "
+    "TSP withdrawal strategy, and behavioral retention "
+    "effects.\n"
+    "- **Force-wide figures** use DoD separation rates on the "
+    "standard profiles; a custom timeline changes your own "
+    "results, not the force-wide stats."
 )
 
 
@@ -563,48 +578,26 @@ cusp = (
     if has_cliff
     else None
 )
-drow20 = (
-    curve.set_index("SepYOS").loc[20] if has_cliff else None
-)
 
 # ----------------------------------------------------------
 # Header + career snapshot
 # ----------------------------------------------------------
 st.title("Beyond the Pension Cliff")
-st.caption(
-    "Blended Retirement System (BRS) vs. legacy High-Three "
-    "— the government-funded value you'd receive, and the "
-    "cost to the government. Every figure is a net present "
-    "value (NPV) at separation: all future pension checks and "
-    "government TSP contributions are converted to a single "
-    "equivalent lump sum in today's money, stated in constant "
-    "2026 dollars."
-)
-st.info(
-    "**For education and illustration only — not financial, "
-    "tax, or retirement advice.** It models typical careers "
-    "with simplifying assumptions and cannot reflect your full "
-    "situation. Consult a personal financial counselor or "
-    "qualified advisor before making any retirement decision.",
-    icon="⚠️",
-)
+st.caption(esc_md(SUMMARY))
 
-with st.expander("How this works — where these numbers come from"):
-    st.markdown(esc_md(HOW_IT_WORKS))
+with st.expander("About this project", expanded=True):
+    st.markdown(esc_md(ABOUT))
 
+st.subheader("Career overview")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Profile", sc.PROFILE_LABELS[profile])
-c2.metric(
-    "Rank at separation",
-    str(rank_at_sep),
-    timing_label,
-    delta_color="off",
-)
+c2.metric("Rank at separation", str(rank_at_sep))
 c3.metric("Age at separation", f"{sep_age}")
 c4.metric(
     "Final monthly basic pay (2026 $)",
     fmt_usd(pay_full.loc[sep_yos]),
 )
+
 # Rank timeline: how long the member holds each grade
 runs = []
 for yos, grade in grades.loc[:sep_yos].items():
@@ -642,32 +635,6 @@ for side in ("top", "right", "left"):
 fig.tight_layout()
 st.pyplot(fig)
 plt.close(fig)
-st.caption(f"Rank timeline ({timing_label})")
-
-# One-line takeaway — colored headline number (blue is neutral;
-# red would read as a warning).
-adv_med = mc["brs_adv"]["p50"]
-if adv_med >= 0:
-    headline = (
-        f"For this career, **BRS yields about {fmt_usd(adv_med)} "
-        "more** over a lifetime than High-Three (median)."
-    )
-else:
-    headline = (
-        "For this career, **legacy High-Three yields about "
-        f"{fmt_usd(-adv_med)} more** over a lifetime than BRS "
-        "(median)."
-    )
-st.markdown(f"#### :blue[{esc_md(headline)}]")
-
-if sep_yos < 20:
-    st.info(
-        f"Separating at {sep_yos} years — **before the "
-        "20-year pension cliff**. Under High-Three you "
-        "would leave with no government-funded retirement "
-        "benefit at all; under BRS you keep the "
-        "government's TSP contributions."
-    )
 
 # ----------------------------------------------------------
 # Ledgers
@@ -675,14 +642,25 @@ if sep_yos < 20:
 left, right = st.columns(2)
 
 with left:
-    st.subheader("Your ledger")
+    st.subheader("What it's worth to you")
     adv = mc["brs_adv"]
     med = adv["p50"]
+    # Lead with the payoff as a metric "cell" — a computed value
+    # that visibly updates with the inputs, set apart from the
+    # static prose. The label names whichever system comes out
+    # ahead; the value is the median lifetime gap.
     leader = "BRS" if med >= 0 else "High-Three"
     st.metric(
-        f"Median lifetime advantage — {leader}",
-        f"${abs(med):,.0f}",
+        f"{leader} advantage over a lifetime (median)",
+        fmt_usd(abs(med)),
     )
+    if sep_yos < 20:
+        st.info(
+            f"At {sep_yos} years you separate **before the "
+            "20-year pension cliff**: High-Three would pay you "
+            "no retirement at all, while BRS still leaves you "
+            "the government's TSP contributions."
+        )
     gov_value = pd.DataFrame(
         {
             "First Year's Pension": [
@@ -698,18 +676,17 @@ with left:
         index=["High-Three", "BRS"],
     )
     st.dataframe(
-        gov_value.style.format(fmt_usd), width="stretch"
+        gov_value.style.format(fmt_usd), width="content"
     )
     st.caption("All amounts are in today's (2026) dollars.")
     st.caption(
-        "Government-funded value only (your pension plus any "
-        "government TSP) — your own contributions are "
-        "identical under both systems and cancel out. "
-        "Lifetime value is the typical result across "
-        f"{N_ITER:,} simulated futures; pension and TSP are "
-        "shown as of separation. The advantage above is "
-        "figured future-by-future, so it won't exactly match "
-        "the difference between the two lifetime values."
+        "Government-funded value only — your own TSP "
+        "contributions are the same under both systems, so they "
+        "cancel out. The first two columns are values at "
+        f"separation; lifetime value is the median across "
+        f"{N_ITER:,} simulated futures. That median advantage is "
+        "figured future-by-future, so it won't exactly equal the "
+        "gap between the two lifetime-value figures."
     )
     if life_offset:
         life_mean = float(
@@ -721,51 +698,50 @@ with left:
         st.caption(
             f"Life expectancy set to {life_offset:+d} yr vs. "
             f"average — about age "
-            f"{life_mean + life_offset:.0f} at this separation "
-            f"(SSA average ≈ {life_mean:.0f}). This moves only "
-            "your value; the government ledger stays at the "
-            "cohort average."
+            f"{life_mean + life_offset:.0f} here (SSA average ≈ "
+            f"{life_mean:.0f}). This shifts only your value; the "
+            "government's cost stays at the cohort average."
         )
 
 with right:
-    st.subheader("Government ledger")
-    g1, g2, g3 = st.columns(3)
-    g1.metric(
-        "Cost under High-Three", fmt_usd(det["H3_GovtCost"])
-    )
-    g2.metric(
-        "Cost under BRS", fmt_usd(det["BRS_GovtCost"])
-    )
+    st.subheader("What it costs the government")
     sav = det["DoD_Savings"]
-    g3.metric(
-        "BRS saves the government" if sav >= 0
-        else "BRS costs the government extra",
-        f"${abs(sav):,.0f}",
+    # Lead with the payoff as a metric "cell" (mirrors the value
+    # panel); the subtraction table below shows where it comes
+    # from.
+    if sav >= 0:
+        st.metric("Cost reduction under BRS", fmt_usd(sav))
+    else:
+        st.metric("Cost increase under BRS", fmt_usd(-sav))
+    save_label = (
+        "= Cost reduction under BRS" if sav >= 0
+        else "= Cost increase under BRS"
     )
+    # Laid out as a subtraction: High-Three cost − BRS cost =
+    # what BRS saves. Mirrors the value table on the left.
+    cost = pd.DataFrame(
+        {"Amount": [
+            det["H3_GovtCost"],
+            det["BRS_GovtCost"],
+            abs(sav),
+        ]},
+        index=[
+            "Cost under High-Three",
+            "− Cost under BRS",
+            save_label,
+        ],
+    )
+    st.dataframe(
+        cost.style.format(fmt_usd), width="content"
+    )
+    st.caption("All amounts are in today's (2026) dollars.")
     st.caption(
-        "What the government expects to pay for this career, "
-        "in today's (2026) dollars. These figures price the "
-        "average member rather than one person's luck, so they "
-        "won't exactly match your own simulated lifetime "
-        "value. The market-outlook setting doesn't change them "
-        "— the government's cost doesn't depend on how the "
-        "investments perform."
+        "What the government expects to pay for this career. "
+        "These price the average member, not one person's luck, "
+        "so they won't match your own simulated value. Market "
+        "outlook doesn't move them: the government's cost doesn't "
+        "depend on investment performance."
     )
-    plabel = sc.PROFILE_LABELS[profile].lower()
-    st.markdown(esc_md(
-        f"**Across the force** (typical {plabel} careers, "
-        "DoD separation rates):\n"
-        f"- {ctx['share_pre20_members']:.0%} of {plabel} "
-        "entrants separate before 20 years; they receive only "
-        f"{ctx['share_pre20_spend']:.1%} of expected BRS "
-        "spending\n"
-        f"- {ctx['share_reaching_sep']:.0%} of {plabel} "
-        f"entrants serve {sep_yos}+ years\n"
-        f"- Expected savings per {plabel} entrant from BRS: "
-        f"{fmt_usd(ctx['expected_savings'])} "
-        f"({fmt_usd(ctx['expected_h3_cost'])} → "
-        f"{fmt_usd(ctx['expected_brs_cost'])})"
-    ))
 
 # ----------------------------------------------------------
 # Charts
@@ -775,7 +751,7 @@ class _VLineHandler(HandlerBase):
 
     The separation marker is a vertical line on the chart; a
     vertical swatch keeps it distinct from the horizontal data
-    lines (the deterministic line is also dashed and dark).
+    lines.
     """
 
     def create_artists(self, legend, orig_handle, xdescent,
@@ -813,12 +789,10 @@ life_note = (
     if life_offset else ""
 )
 st.caption(
-    f"Values come from {N_ITER:,} simulated futures, computed "
-    "across every possible separation year. Both charts show "
-    "government-funded value only (the pension plus government "
-    "TSP); the part you fund yourself is identical under both "
-    "systems, so it's excluded to isolate what the government "
-    f"provides.{life_note}"
+    f"Across every separation year, from {N_ITER:,} simulated "
+    "futures. Both charts show government-funded value only "
+    "(pension plus government TSP) — your own contributions are "
+    f"equal under both systems, so they cancel out.{life_note}"
 )
 # Stacked vertically, not side-by-side: the two charts share
 # the x-axis (Years of Service), not the y-axis,
@@ -918,8 +892,8 @@ with ch1:
         alpha=0.9, zorder=5,
     )
     ax.set_xlabel("Years of Service")
-    ax.set_ylabel("Lifetime Retirement Value (2026 $)")
-    ax.set_title("Lifetime Retirement Value by System")
+    ax.set_ylabel("Lifetime Value (2026 $)")
+    ax.set_title("Total Lifetime Value")
     ax.yaxis.set_major_formatter(
         plt.FuncFormatter(lambda v, _: f"${v / 1000:,.1f}M")
     )
@@ -977,21 +951,6 @@ with ch2:
             post["SepYOS"], post["brs_adv_p50"] / 1000,
             color=pcolor, lw=2, path_effects=med_pe,
         )
-        # Deterministic (03a), broken at the cliff too.
-        dpre = curve[curve["SepYOS"] < 20]
-        dpost = curve[curve["SepYOS"] >= 20]
-        dcusp = (
-            drow20["BRS_TSP_PV"] - drow20["H3TSP_PV"]
-        ) / 1000
-        ax.plot(
-            list(dpre["SepYOS"]) + [20],
-            list(dpre["BRSAdv"] / 1000) + [dcusp],
-            color=fg, ls="--", lw=1.2, label="Deterministic",
-        )
-        ax.plot(
-            dpost["SepYOS"], dpost["BRSAdv"] / 1000,
-            color=fg, ls="--", lw=1.2,
-        )
     else:
         ax.fill_between(
             mcc["SepYOS"], mcc[f"brs_adv_{band_lo}"] / 1000,
@@ -1004,10 +963,6 @@ with ch2:
             color=pcolor, lw=2, label="Median",
             path_effects=med_pe,
         )
-        ax.plot(
-            curve["SepYOS"], curve["BRSAdv"] / 1000,
-            color=fg, ls="--", lw=1.2, label="Deterministic",
-        )
     ax.plot(
         [sep_yos], [mc["brs_adv"]["p50"] / 1000], "o",
         color=fg,
@@ -1019,24 +974,22 @@ with ch2:
     )
     ax.set_xlabel("Years of Service")
     ax.set_ylabel("Lifetime Value Advantage (2026 $)")
-    ax.set_title(
-        "Lifetime Value Difference: BRS vs. High-Three"
-    )
+    # Extra title pad leaves room for the legend, which sits
+    # between the title and the plot area (set below).
+    ax.set_title("Lifetime Value Difference", pad=34)
     ax.yaxis.set_major_formatter(
         plt.FuncFormatter(lambda v, _: f"${abs(v):,.0f}K")
     )
     # Fix the y-axis to the widest (80%) band extent, regardless
     # of the selected band width, so toggling 50%/80% rescales
-    # nothing — the median/deterministic curves stay put and the
-    # narrower 50% band just sits inside the same frame, making
-    # the change in spread easy to see. Always include 0 so both
-    # advantage regions show.
+    # nothing — the median curve stays put and the narrower 50%
+    # band just sits inside the same frame, making the change in
+    # spread easy to see. Always include 0 so both advantage
+    # regions show.
     y_cands = [
         0.0,
         (mcc["brs_adv_p10"] / 1000).min(),
         (mcc["brs_adv_p90"] / 1000).max(),
-        (curve["BRSAdv"] / 1000).min(),
-        (curve["BRSAdv"] / 1000).max(),
         mc["brs_adv"]["p50"] / 1000,
     ]
     if has_cliff:
@@ -1065,27 +1018,31 @@ with ch2:
         transform=ax.transAxes, fontsize=9, style="italic",
         color=tc["h3_label"],
     )
-    # Legend below the axes (not in a corner): the difference
-    # fan is often wide and crosses the whole panel, so any
-    # in-axes corner can collide with it. Placing it below keeps
-    # the plot width unchanged, so the x-axis still aligns with
-    # the chart above. Streamlit saves with bbox_inches="tight",
-    # so the off-axes legend is not clipped.
+    # Legend above the plot, between it and the title (not in a
+    # corner): the difference fan is often wide and crosses the
+    # whole panel, so any in-axes corner can collide with it.
+    # Sitting it just above the top spine keeps the plot width
+    # unchanged, so the x-axis still aligns with the chart above.
+    # Streamlit saves with bbox_inches="tight", so it's not
+    # clipped.
     legend_with_sep(
         ax, sep_yos, fg,
-        loc="upper center", bbox_to_anchor=(0.5, -0.20),
-        ncol=4,
+        loc="lower center", bbox_to_anchor=(0.5, 1.0),
+        ncol=3,
     )
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     st.pyplot(fig)
     plt.close(fig)
 
-    # Band-width view toggle, centered under this chart. It is a
-    # view control rather than a model input, so it lives here
-    # instead of the sidebar; session_state["band_view"] feeds
-    # the draw above on the next rerun.
-    _, mid, _ = st.columns([1, 2, 1])
+    # Band-width view toggle, under this chart. It is a view
+    # control rather than a model input, so it lives here instead
+    # of the sidebar; session_state["band_view"] feeds the draw
+    # above on the next rerun. Streamlit can't truly center the
+    # radio's contents (they left-align inside whatever column
+    # holds them), so the spacer ratio just nudges it toward the
+    # middle: a wider left spacer starts the toggle further right.
+    _, mid, _ = st.columns([2, 2, 1])
     with mid:
         st.radio(
             "Uncertainty band",
@@ -1100,6 +1057,117 @@ with ch2:
                 "tails)."
             ),
         )
+
+# ----------------------------------------------------------
+# Across the force — the zoom-out from this one career to the
+# whole yearly intake of entrants. Sits after the charts: the
+# cliff charts show value/cost at every separation year, and
+# these are those same per-year numbers weighted by how many
+# members actually leave at each year (DoD separation rates).
+# ----------------------------------------------------------
+st.subheader("Across the force")
+reach20 = {
+    p: sc.population_context(inputs, p, 20)["share_reaching_sep"]
+    for p in ("Enlisted", "Officer")
+}
+st.caption(
+    "Expected government cost for each person who joins, "
+    "weighted by how often members separate (DoD rates). BRS "
+    "costs less for every profile, but the savings are far "
+    "larger for officers than enlisted. That's because only "
+    f"about {reach20['Enlisted']:.0%} of enlisted reach 20 "
+    f"years and draw a pension, versus {reach20['Officer']:.0%} "
+    "of officers."
+)
+
+# Government cost per entrant, High-Three vs BRS, for all three
+# profiles — the fiscal story across the force. System colors
+# (maize H3 / navy BRS) match the government ledger above.
+# These expected costs are weighted over every career length,
+# so they don't depend on the separation slider and the chart
+# is stable as it moves.
+tc = theme()
+fg = tc["fg"]
+order = list(tc["profiles"])  # Enlisted, PEO, Officer
+pctx = {
+    p: sc.population_context(inputs, p, sep_yos) for p in order
+}
+xmax = max(c["expected_h3_cost"] for c in pctx.values()) / 1000
+fig, ax = plt.subplots(figsize=(10, 3.3))
+for i, p in enumerate(order):
+    cy = len(order) - 1 - i  # Enlisted on top
+    c = pctx[p]
+    ax.barh(
+        cy + 0.19, c["expected_h3_cost"] / 1000, height=0.34,
+        color=H3_COLOR, edgecolor=BRS_COLOR, linewidth=0.5,
+        zorder=3,
+    )
+    ax.barh(
+        cy - 0.19, c["expected_brs_cost"] / 1000, height=0.34,
+        color=BRS_COLOR, edgecolor=BRS_COLOR, linewidth=0.5,
+        zorder=3,
+    )
+    ax.text(
+        xmax * 1.04, cy,
+        f"saves ${c['expected_savings'] / 1000:,.0f}K",
+        va="center", ha="left", fontsize=9, fontweight="bold",
+        color=fg,
+    )
+ax.set_xlim(0, xmax * 1.32)
+ax.set_yticks(range(len(order)))
+ax.set_yticklabels(
+    [sc.PROFILE_LABELS[p] for p in reversed(order)]
+)
+ax.xaxis.set_major_formatter(
+    plt.FuncFormatter(lambda v, _: f"${v:,.0f}K")
+)
+ax.set_xlabel("Expected cost per entrant (2026 $)")
+ax.tick_params(length=0)
+for side in ("top", "right", "left"):
+    ax.spines[side].set_visible(False)
+ax.grid(True, axis="x", alpha=0.3)
+ax.set_axisbelow(True)
+ax.legend(
+    handles=[
+        Patch(facecolor=H3_COLOR, edgecolor=BRS_COLOR,
+              linewidth=0.5, label="High-Three"),
+        Patch(facecolor=BRS_COLOR, edgecolor=BRS_COLOR,
+              linewidth=0.5, label="BRS"),
+    ],
+    loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2,
+    fontsize=8, frameon=False,
+)
+fig.tight_layout()
+st.pyplot(fig)
+plt.close(fig)
+
+# Scale per-entrant costs to a full annual cohort — the
+# project's headline aggregate. Enlisted + Officer accessions
+# only (PEOs are inside the enlisted line); deterministic, to
+# match the per-entrant chart above. Deriving the saving as the
+# difference keeps the from/to and the saving arithmetically
+# consistent at the displayed precision.
+total_h3 = sum(
+    pctx[p]["expected_h3_cost"] * n
+    for p, n in ACCESSIONS.items()
+)
+total_brs = sum(
+    pctx[p]["expected_brs_cost"] * n
+    for p, n in ACCESSIONS.items()
+)
+total_save = total_h3 - total_brs
+st.markdown(esc_md(
+    "**Scaled to one year's cohort** (about 140,000 enlisted "
+    "and 18,000 officers), BRS lowers the government's cost of "
+    f"retirement benefits from about **${total_h3 / 1e9:.1f} "
+    f"billion to ${total_brs / 1e9:.1f} billion** — roughly "
+    f"**${total_save / 1e9:.1f} billion** less."
+))
+st.caption(
+    "Per-entrant savings times annual accessions; "
+    "prior-enlisted officers count as enlisted, not a separate "
+    "line."
+)
 
 # ----------------------------------------------------------
 # Plain-language explanation (Gemini, built-in fallback)
@@ -1122,7 +1190,22 @@ if st.button("Explain my scenario in plain language"):
     st.caption(source)
 
 # ----------------------------------------------------------
-# Assumptions
+# Reference detail — the plain-language method and the
+# technical fine print, both at the bottom for readers who
+# want depth after seeing their own numbers.
 # ----------------------------------------------------------
+with st.expander("How this works — where these numbers come from"):
+    st.markdown(esc_md(HOW_IT_WORKS))
 with st.expander("Model assumptions & limitations"):
     st.markdown(ASSUMPTIONS)
+
+# Footer — author + contact links, repeated here (also in the
+# About block up top) so they're reachable after using the tool
+# even if the About expander is collapsed.
+st.divider()
+st.caption(
+    "Built by Steven Gelety · "
+    "[GitHub](https://github.com/sgelety/"
+    "military-retirement-monte-carlo) · "
+    "[LinkedIn](https://www.linkedin.com/in/steven-gelety/)"
+)

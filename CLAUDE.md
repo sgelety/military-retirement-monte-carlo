@@ -277,8 +277,13 @@ career it shows the member ledger (BRS − H3 difference, live
 `run_scenario` Monte Carlo at N=20,000) and the government ledger
 (deterministic actuarial cost under each system), plus nb03b-style
 fan charts (median + P10–P90 / P25–P75 bands across every
-separation year, deterministic dashed overlay, user's point
-marked). The MC runs as a full curve — one seeded `run_scenario`
+separation year, user's point marked). The deterministic dashed
+overlay was removed from the app charts (2026-06-27) as visual
+clutter for a lay audience — it nearly coincides with the MC
+median and introduced an unexplained term; the deterministic
+*computation* stays (it still drives the government ledger and
+the median/deterministic comparison lives in nb03b). The MC runs
+as a full curve — one seeded `run_scenario`
 per YOS (`mc_curve`, seed = SEED + sep_yos), cached per input
 combo (~3 s at 20K iterations; separation-slider moves are then
 free). A **Market outlook** radio applies the ±2 pp return-regime
@@ -288,6 +293,67 @@ keeps discount as its own Advanced control). Outlook deliberately
 does not move the government ledger (actuarial basis). Run from
 repo root: `streamlit run app/streamlit_app.py`.
 
+- **App language/layout review (2026-06-27).** A pass to read less
+  generated / more in the author's voice, cut wordiness, and
+  tighten structure. Page order: title → one-line summary →
+  **About this project** expander (open by default — the author's
+  Coast Guard motivation, the README's historical-but-still-useful
+  framing, GitHub + LinkedIn links, an AI-use note "I made the
+  design and analysis decisions; Claude helped implement and
+  debug," and the education-only disclaimer folded in; the
+  standalone amber warning box was dropped) → **Career overview**
+  heading (the four snapshot metrics + rank strip; the rank
+  "(typical timing)" delta and the "Rank timeline" caption were
+  removed) → the two ledgers → cliff charts → **Across the force**
+  → **Explain my numbers** → the **How this works** + **Model
+  assumptions** expanders at the bottom. A footer ("Built by Steven
+  Gelety · GitHub · LinkedIn") repeats the contact links below the
+  fold. Cliff-chart titles are now **"Total Lifetime Value"** (top;
+  median lines only) and **"Lifetime Value Difference"** (bottom;
+  the banded one), and the difference chart's legend sits between
+  its title and plot.
+- **Ledger headings + metric cells (2026-06-27).** The panels are
+  titled **"What it's worth to you"** / **"What it costs the
+  government."** Each leads with an `st.metric` "cell" (a value
+  that visibly updates with the inputs, set apart from prose)
+  rather than the old `#### :blue[]` sentence: member = "{leader}
+  advantage over a lifetime (median)"; government = "Cost reduction
+  / increase under BRS" (cost language throughout, so it doesn't
+  clash with the panel title). The government numbers are an
+  `st.dataframe` subtraction (Cost under High-Three − Cost under
+  BRS = the reduction), mirroring the member value table; both use
+  `width="content"` (a centered / two-line-header HTML-table
+  variant was tried and reverted as over-complicated).
+- **"Across the force" redesign (2026-06-27).** Moved to *after*
+  the charts (zoom-out from one career to the whole intake) and
+  rebuilt as an **all-three-profiles fiscal chart**: expected
+  government cost per entrant, High-Three (maize) vs BRS (navy),
+  horizontal bars per profile with a "saves \$XXk" label, x-axis
+  in \$K. Weighted over every career length (`population_context`
+  per profile) so it is independent of the separation slider. The
+  intro caption cites the reach-20 split (≈19% enlisted vs ≈41%
+  officers, pulled live) to explain why officer savings dwarf
+  enlisted. A closing line scales per-entrant to one cohort via
+  `ACCESSIONS = {Enlisted: 140_000, Officer: 18_000}` (PEOs counted
+  as enlisted, not a separate line): "BRS lowers the government's
+  cost of retirement benefits from about \$48.1B to \$43.0B —
+  roughly \$5.1B less" (saving derived as the from−to difference
+  for consistency; static across inputs, so it stays prose, not a
+  metric cell). Replaced an earlier single-profile "representation
+  vs spending" two-bar graphic.
+- **Color / text consistency (2026-06-27).** Meaningful color lives
+  only in the charts (system + profile palette); on-screen text is
+  two theme-adaptive tiers — body/metric for takeaways, muted
+  caption for units/sources/methodology — so it reads the same in
+  light or dark mode. The `:blue[]` headlines were removed (they
+  read as BRS-blue even when High-Three won); the only colored text
+  left is the semantic `st.info` (cliff note) / `st.error`
+  (timeline) boxes. The **Model assumptions** list was regrouped
+  under **How the numbers are computed / What your settings change
+  / Scope & limitations**, with the deterministic baseline reframed
+  as "center-path figures" and the MC as "simulated figures," and
+  the TSP vocabulary (L fund, glide path, drawdown) consolidated
+  into one bullet.
 - **No new modeling.** `app/scenario_calcs.py` recomputes everything
   with the existing `src/` functions; member math mirrors nb03a,
   government cost mirrors nb04. On the default timelines it
@@ -309,8 +375,8 @@ repo root: `streamlit run app/streamlit_app.py`.
   *relative* offset (not an absolute age) so it stays stable as the
   separation slider moves and is exactly 0/identical-to-notebooks at
   default. **Scoped to the member side only:** it moves the member
-  ledger, the top fan's median lines and the difference fan's band
-  and deterministic overlay, but **not** the government ledger —
+  ledger, the top fan's median lines and the difference fan's band,
+  but **not** the government ledger —
   `deterministic_values`
   computes the government pension cost at the population-mean
   `n_pens` (offset 0) and the member pension at `n_pens + offset`,
@@ -399,9 +465,9 @@ repo root: `streamlit run app/streamlit_app.py`.
   it redraws only that chart and touches no model input). The
   difference chart's y-axis is **fixed to the 80% (p10/p90)
   envelope regardless of the selected width** (computed from the
-  band, deterministic curve, median, cusp, and 0), so toggling
-  50%/80% rescales nothing — the narrower band just sits inside the
-  same frame, making the change in spread easy to read.
+  band, median, cusp, and 0), so toggling 50%/80% rescales nothing
+  — the narrower band just sits inside the same frame, making the
+  change in spread easy to read.
 - **Fixed white chart panels (mode-independent).** Every app
   figure is a self-contained white panel that renders identically
   and stays legible whether the Streamlit page is light or dark.
@@ -421,9 +487,9 @@ repo root: `streamlit run app/streamlit_app.py`.
   fan is median-only), `region_a = 0.18` (subtle half-shading).
   The `band_a = 0.55` and `h3_fill` theme keys were removed with
   the left-fan bands (2026-06-25). The maize H3 line on the left
-  fan keeps its navy outline (`H3_COLOR` `#FFCB05`). Accents — the deterministic dash, the zero/your-YOS
-  reference lines, the selected-point dot — use `fg`, and open-marker
-  fills use `bg` (white). `theme_fg()` (rank strip) delegates to
+  fan keeps its navy outline (`H3_COLOR` `#FFCB05`). Accents — the
+  zero/your-YOS reference lines, the selected-point dot — use `fg`,
+  and open-marker fills use `bg` (white). `theme_fg()` (rank strip) delegates to
   `theme()`. A white panel sits on the dark page in dark mode (a
   deliberate legibility-over-blend tradeoff, user decision
   2026-06-16).
@@ -431,15 +497,16 @@ repo root: `streamlit run app/streamlit_app.py`.
   markdown: every dollar amount rendered via `st.markdown` /
   `st.caption` must pass through the app's `esc_md` helper
   (`st.metric` and dataframes are plain text — no escaping there).
-- A plain-language "How this works" expander sits under the title
-  (lay explanation of the two systems, the 20K-future simulation,
-  the 2026-$ NPV convention, the equal-contribution design, and
-  exclusions); the technical "Model assumptions & limitations"
-  expander at the bottom remains the fine print. Keep both in sync
-  with any model change.
+- A plain-language "How this works" expander sits at the bottom,
+  grouped with "Model assumptions & limitations" (relocated there
+  and roughly halved in the 2026-06-27 review): a lay explanation
+  of the two systems, the 20K-future simulation, the 2026-$ NPV
+  convention, and the equal-contribution design. Both remain the
+  fine print at the foot of the page — keep them in sync with any
+  model change.
 - A rank-timeline strip (horizontal bar of grade tenures, E grades
   light Ross-orange tint `#F0C9A8` / O grades light Matthaei-violet
-  tint `#C3C0DA`) sits under the snapshot
+  tint `#C3C0DA`) sits under the Career overview
   metrics; a native multi-handle slider for promotion input was
   considered and rejected (needs a custom JS component).
 - Headless testing: `streamlit.testing.v1.AppTest` runs the app
